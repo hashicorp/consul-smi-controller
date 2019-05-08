@@ -1,14 +1,34 @@
-kind: TrafficTarget
-apiVersion: access.smi-spec.io/v1alpha1
+---
+apiVersion: smi-spec.io/v1alpha1
+kind: TCPRoute
 metadata:
-  name: path-specific
+  name: tcp-route
+
+---
+kind: TrafficTarget
+apiVersion: smi-spec.io/v1alpha1
+metadata:
+  name: foo
   namespace: default
 selector:
   matchLabels:
     app: foo
 port: 8080
 rules:
-- kind: HTTPRoutes
-  name: the-routes
-  matches:
-  - metrics
+- kind: TCPRoute
+  name: tcp-route
+
+---
+kind: IdentityBinding
+apiVersion: smi-spec.io/v1alpha1
+metadata:
+  name: account-specific
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: bar
+  namespace: default
+targetRef:
+  kind: TrafficTarget
+  name: foo 
+

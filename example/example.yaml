@@ -1,0 +1,14 @@
+kind: TrafficTarget
+apiVersion: access.smi-spec.io/v1alpha1
+metadata:
+  name: path-specific
+  namespace: default
+selector:
+  matchLabels:
+    app: foo
+port: 8080
+rules:
+- kind: HTTPRoutes
+  name: the-routes
+  matches:
+  - metrics

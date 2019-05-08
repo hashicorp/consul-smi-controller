@@ -21,13 +21,14 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
+	"k8s.io/sample-controller/pkg/signals"
 
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
-	clientset "k8s.io/sample-controller/pkg/generated/clientset/versioned"
-	informers "k8s.io/sample-controller/pkg/generated/informers/externalversions"
-	"k8s.io/sample-controller/pkg/signals"
+	clientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/clientset/versioned"
+	informers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/informers/externalversions"
+	// "k8s.io/sample-controller/pkg/signals"
 )
 
 var (
@@ -51,22 +52,23 @@ func main() {
 		klog.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	exampleClient, err := clientset.NewForConfig(cfg)
+	smiClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building example clientset: %s", err.Error())
+		klog.Fatalf("Error building smi clientset: %s", err.Error())
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	exampleInformerFactory := informers.NewSharedInformerFactory(exampleClient, time.Second*30)
+	smiInformerFactory := informers.NewSharedInformerFactory(smiClient, time.Second*30)
 
-	controller := NewController(kubeClient, exampleClient,
-		kubeInformerFactory.Apps().V1().Deployments(),
-		exampleInformerFactory.Samplecontroller().V1alpha1().Foos())
+	controller := NewController(kubeClient, smiClient,
+		smiInformerFactory.Smispec().V1alpha1().TrafficTargets(),
+		smiInformerFactory.Smispec().V1alpha1().IdentityBindings(),
+		smiInformerFactory.Smispec().V1alpha1().TCPRoutes())
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
 	kubeInformerFactory.Start(stopCh)
-	exampleInformerFactory.Start(stopCh)
+	smiInformerFactory.Start(stopCh)
 
 	if err = controller.Run(2, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())

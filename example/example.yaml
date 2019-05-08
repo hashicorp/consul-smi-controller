@@ -1,9 +1,11 @@
+# TCPRoute for Service A 
 ---
 apiVersion: smi-spec.io/v1alpha1
 kind: TCPRoute
 metadata:
-  name: tcp-route
+  name: service-a-tcp-route
 
+# TrafficTarget defines allowed routes for a service
 ---
 kind: TrafficTarget
 apiVersion: smi-spec.io/v1alpha1
@@ -12,12 +14,15 @@ metadata:
   namespace: default
 selector:
   matchLabels:
-    app: foo
+    app: service-a
 port: 8080
 rules:
 - kind: TCPRoute
   name: tcp-route
 
+# IdentityBinding defines services which are allowed to connect on the
+# TrafficTarget routes
+# TrafficTarget will always be in the same namespace as the IdentityBinding
 ---
 kind: IdentityBinding
 apiVersion: smi-spec.io/v1alpha1
@@ -26,9 +31,56 @@ metadata:
   namespace: default
 subjects:
 - kind: ServiceAccount
-  name: bar
+  name: service-b
   namespace: default
 targetRef:
   kind: TrafficTarget
   name: foo 
 
+# Define a ServiceAccount for Service A
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-a
+automountServiceAccountToken: false
+
+# Define a ServiceAccount for Service B
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-b
+automountServiceAccountToken: false
+
+# Create a pod for service-a
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: service-a
+  labels:
+    app: service-a
+spec:
+  serviceAccountName: service-a
+  automountServiceAccountToken: false
+  containers:
+  - name: nginx
+    image: nginx
+    imagePullPolicy: IfNotPresent
+
+# Create a pod for service-b
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: service-b
+  labels:
+    app: service-b
+spec:
+  serviceAccountName: service-b
+  automountServiceAccountToken: false
+  containers:
+  - name: nginx
+    image: nginx
+    imagePullPolicy: IfNotPresent

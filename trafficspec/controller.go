@@ -34,6 +34,7 @@ import (
 	trafficspecscheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/clientset/versioned/scheme"
 	informers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/informers/externalversions/trafficspec/v1alpha1"
 	listers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/listers/trafficspec/v1alpha1"
+	"github.com/hashicorp/consul-smi/clients"
 )
 
 const controllerAgentName = "smi-controller"
@@ -65,6 +66,7 @@ type Controller struct {
 	tcpRouteSynced cache.InformerSynced
 	workqueue      workqueue.RateLimitingInterface
 	recorder       record.EventRecorder
+	consulClient   clients.Consul
 }
 
 // NewController returns a new sample controller
@@ -74,6 +76,7 @@ func NewController(
 	targetInformer informers.TrafficTargetInformer,
 	bindingInformer informers.IdentityBindingInformer,
 	tcpRouteInformer informers.TCPRouteInformer,
+	consulClient clients.Consul,
 ) *Controller {
 
 	// Create event broadcaster
@@ -97,6 +100,7 @@ func NewController(
 		tcpRouteSynced: tcpRouteInformer.Informer().HasSynced,
 		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Foos"),
 		recorder:       recorder,
+		consulClient:   consulClient,
 	}
 
 	klog.Info("Setting up event handlers")

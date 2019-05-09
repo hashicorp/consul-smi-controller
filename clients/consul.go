@@ -21,8 +21,12 @@ type ConsulImpl struct {
 }
 
 // NewConsul creates a new Consul client
-func NewConsul(c api.Config) (Consul, error) {
-	cli, err := api.NewClient(&c)
+func NewConsul(httpAddr, aclToken string) (Consul, error) {
+	conf := api.DefaultConfig()
+	conf.Address = httpAddr
+	conf.Token = aclToken
+
+	cli, err := api.NewClient(conf)
 	if err != nil {
 		return nil, err
 	}

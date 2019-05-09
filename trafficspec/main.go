@@ -15,6 +15,7 @@ package main
 
 import (
 	"flag"
+	"log"
 	"time"
 
 	kubeinformers "k8s.io/client-go/informers"
@@ -28,16 +29,25 @@ import (
 
 	clientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/clientset/versioned"
 	informers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/informers/externalversions"
+	"github.com/hashicorp/consul-smi/clients"
 	// "k8s.io/sample-controller/pkg/signals"
 )
 
 var (
-	masterURL  string
-	kubeconfig string
+	masterURL      string
+	kubeconfig     string
+	consulACLToken string
+	consulHTTPAddr string
 )
 
 func main() {
 	flag.Parse()
+
+	// create the consul client
+	consulClient, err := clients.NewConsul(consulHTTPAddr, consulACLToken)
+	if err != nil {
+		log.Fatal("Unable to create Consul client", err)
+	}
 
 	// set up signals so we handle the first shutdown signal gracefully
 	stopCh := signals.SetupSignalHandler()
@@ -60,10 +70,14 @@ func main() {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	smiInformerFactory := informers.NewSharedInformerFactory(smiClient, time.Second*30)
 
-	controller := NewController(kubeClient, smiClient,
+	controller := NewController(
+		kubeClient,
+		smiClient,
 		smiInformerFactory.Smispec().V1alpha1().TrafficTargets(),
 		smiInformerFactory.Smispec().V1alpha1().IdentityBindings(),
-		smiInformerFactory.Smispec().V1alpha1().TCPRoutes())
+		smiInformerFactory.Smispec().V1alpha1().TCPRoutes(),
+		consulClient,
+	)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
@@ -78,4 +92,6 @@ func main() {
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&consulHTTPAddr, "consul-http-token", "", "ACL Token for communicating with Consul")
+	flag.StringVar(&consulACLToken, "consul-http-addr", "http://localhost:8500", "Address of the consul server, default http://localhost:8500")
 }

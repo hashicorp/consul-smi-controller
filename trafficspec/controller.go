@@ -31,11 +31,14 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
 
-	trafficspecv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/trafficspec/v1alpha1"
-	clientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/clientset/versioned"
-	trafficspecscheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/clientset/versioned/scheme"
-	informers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/informers/externalversions/trafficspec/v1alpha1"
-	listers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/listers/trafficspec/v1alpha1"
+	accessv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/access/v1alpha1"
+	accessClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned"
+	trafficspecscheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/scheme"
+	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions/access/v1alpha1"
+	accessListers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/listers/access/v1alpha1"
+	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
+	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions/specs/v1alpha1"
+	specsListers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/listers/specs/v1alpha1"
 	"github.com/hashicorp/consul-smi/clients"
 )
 
@@ -58,26 +61,28 @@ const (
 
 // Controller is the controller implementation for Foo resources
 type Controller struct {
-	kubeclientset  kubernetes.Interface
-	smiclientset   clientset.Interface
-	bindingLister  listers.IdentityBindingLister
-	bindingSynced  cache.InformerSynced
-	targetLister   listers.TrafficTargetLister
-	targetSynced   cache.InformerSynced
-	tcpRouteLister listers.TCPRouteLister
-	tcpRouteSynced cache.InformerSynced
-	workqueue      workqueue.RateLimitingInterface
-	recorder       record.EventRecorder
-	consulClient   clients.Consul
+	kubeclientset   kubernetes.Interface
+	accessClientset accessClientset.Interface
+	specsClientset  specsClientset.Interface
+	bindingLister   accessListers.IdentityBindingLister
+	bindingSynced   cache.InformerSynced
+	targetLister    accessListers.TrafficTargetLister
+	targetSynced    cache.InformerSynced
+	tcpRouteLister  specsListers.TCPRouteLister
+	tcpRouteSynced  cache.InformerSynced
+	workqueue       workqueue.RateLimitingInterface
+	recorder        record.EventRecorder
+	consulClient    clients.Consul
 }
 
 // NewController returns a new sample controller
 func NewController(
 	kubeclientset kubernetes.Interface,
-	smiclientset clientset.Interface,
-	targetInformer informers.TrafficTargetInformer,
-	bindingInformer informers.IdentityBindingInformer,
-	tcpRouteInformer informers.TCPRouteInformer,
+	accessClientset accessClientset.Interface,
+	specsClientset specsClientset.Interface,
+	targetInformer accessInformers.TrafficTargetInformer,
+	bindingInformer accessInformers.IdentityBindingInformer,
+	tcpRouteInformer specsInformers.TCPRouteInformer,
 	consulClient clients.Consul,
 ) *Controller {
 
@@ -92,17 +97,18 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:  kubeclientset,
-		smiclientset:   smiclientset,
-		bindingLister:  bindingInformer.Lister(),
-		bindingSynced:  bindingInformer.Informer().HasSynced,
-		targetLister:   targetInformer.Lister(),
-		targetSynced:   targetInformer.Informer().HasSynced,
-		tcpRouteLister: tcpRouteInformer.Lister(),
-		tcpRouteSynced: tcpRouteInformer.Informer().HasSynced,
-		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Foos"),
-		recorder:       recorder,
-		consulClient:   consulClient,
+		kubeclientset:   kubeclientset,
+		accessClientset: accessClientset,
+		specsClientset:  specsClientset,
+		bindingLister:   bindingInformer.Lister(),
+		bindingSynced:   bindingInformer.Informer().HasSynced,
+		targetLister:    targetInformer.Lister(),
+		targetSynced:    targetInformer.Informer().HasSynced,
+		tcpRouteLister:  tcpRouteInformer.Lister(),
+		tcpRouteSynced:  tcpRouteInformer.Informer().HasSynced,
+		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Foos"),
+		recorder:        recorder,
+		consulClient:    consulClient,
 	}
 
 	klog.Info("Setting up event handlers")
@@ -125,7 +131,7 @@ func NewController(
 	bindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			klog.Info("IdentifyBinding created")
-			binding := obj.(*trafficspecv1alpha1.IdentityBinding)
+			binding := obj.(*accessv1alpha1.IdentityBinding)
 
 			// TO
 			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(binding.TargetRef.Name)

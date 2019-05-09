@@ -27,8 +27,10 @@ import (
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
 	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
-	clientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/clientset/versioned"
-	informers "github.com/deislabs/smi-sdk-go/pkg/gen/client/trafficspec/informers/externalversions"
+	accessClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned"
+	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
+	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
+	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions"
 	"github.com/hashicorp/consul-smi/clients"
 	// "k8s.io/sample-controller/pkg/signals"
 )
@@ -62,27 +64,35 @@ func main() {
 		klog.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	smiClient, err := clientset.NewForConfig(cfg)
+	accessClient, err := accessClientset.NewForConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error building smi clientset: %s", err.Error())
+		klog.Fatalf("Error building access clientset: %s", err.Error())
+	}
+
+	specsClient, err := specsClientset.NewForConfig(cfg)
+	if err != nil {
+		klog.Fatalf("Error building specs clientset: %s", err.Error())
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
-	smiInformerFactory := informers.NewSharedInformerFactory(smiClient, time.Second*30)
+	accessInformerFactory := accessInformers.NewSharedInformerFactory(accessClient, time.Second*30)
+	specsInformerFactory := specsInformers.NewSharedInformerFactory(specsClient, time.Second*30)
 
 	controller := NewController(
 		kubeClient,
-		smiClient,
-		smiInformerFactory.Smispec().V1alpha1().TrafficTargets(),
-		smiInformerFactory.Smispec().V1alpha1().IdentityBindings(),
-		smiInformerFactory.Smispec().V1alpha1().TCPRoutes(),
+		accessClient,
+		specsClient,
+		accessInformerFactory.Access().V1alpha1().TrafficTargets(),
+		accessInformerFactory.Access().V1alpha1().IdentityBindings(),
+		specsInformerFactory.Specs().V1alpha1().TCPRoutes(),
 		consulClient,
 	)
 
 	// notice that there is no need to run Start methods in a separate goroutine. (i.e. go kubeInformerFactory.Start(stopCh)
 	// Start method is non-blocking and runs all registered informers in a dedicated goroutine.
 	kubeInformerFactory.Start(stopCh)
-	smiInformerFactory.Start(stopCh)
+	accessInformerFactory.Start(stopCh)
+	specsInformerFactory.Start(stopCh)
 
 	if err = controller.Run(2, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())

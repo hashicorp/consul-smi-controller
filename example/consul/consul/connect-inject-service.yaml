@@ -1,0 +1,22 @@
+---
+# Source: consul/templates/connect-inject-service.yaml
+# The service for the Connect sidecar injector
+apiVersion: v1
+kind: Service
+metadata:
+  name: consul-consul-connect-injector-svc
+  namespace: default
+  labels:
+    app: consul
+    chart: consul-helm
+    heritage: Tiller
+    release: consul
+spec:
+  ports:
+  - port: 443
+    targetPort: 8080
+  selector:
+    app: consul
+    release: "consul"
+    component: connect-injector
+

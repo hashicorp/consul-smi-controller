@@ -1,0 +1,50 @@
+---
+# Source: consul/templates/server-acl-init-job.yaml
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: consul-consul-server-acl-init
+  namespace: default
+  labels:
+    app: consul
+    chart: consul-helm
+    heritage: Tiller
+    release: consul
+  annotations:
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: consul-consul-server-acl-init
+      labels:
+        app: consul
+        chart: consul-helm
+        release: consul
+        component: server-acl-init
+      annotations:
+        "consul.hashicorp.com/connect-inject": "false"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: consul-consul-server-acl-init
+      containers:
+        - name: post-install-job
+          image: hashicorp/consul-k8s:0.8.0
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - "/bin/sh"
+            - "-ec"
+            - |
+              consul-k8s server-acl-init \
+                -release-name=consul \
+                -k8s-namespace=default \
+                -allow-dns=true \
+                -create-inject-token=true \
+                -acl-binding-rule-selector=serviceaccount.name!=default \
+                -expected-replicas=1

@@ -26,9 +26,12 @@ type ConsulImpl struct {
 }
 
 // NewConsul creates a new Consul client
-func NewConsul() {}
+func NewConsul(c api.Config) (Consul, error) {
+	return nil, nil
+}
 
 // LookupServiceWithJWT looks up a Connect service using a K8s JWT
 func (c *ConsulImpl) LookupServiceWithJWT(jwt string) (string, error) {
-
+	//c.client.ACL().
+	return "", nil
 }

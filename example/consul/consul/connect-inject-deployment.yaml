@@ -1,0 +1,74 @@
+---
+# Source: consul/templates/connect-inject-deployment.yaml
+# The deployment for running the Connect sidecar injector
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consul-consul-connect-injector-webhook-deployment
+  namespace: default
+  labels:
+    app: consul
+    chart: consul-helm
+    heritage: Tiller
+    release: consul
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consul
+      chart: consul-helm
+      release: consul
+      component: connect-injector
+  template:
+    metadata:
+      labels:
+        app: consul
+        chart: consul-helm
+        release: consul
+        component: connect-injector
+      annotations:
+        "consul.hashicorp.com/connect-inject": "false"
+    spec:
+      serviceAccountName: consul-consul-connect-injector-webhook-svc-account
+      containers:
+        - name: sidecar-injector
+          image: "hashicorp/consul-k8s:0.8.0"
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - "/bin/sh"
+            - "-ec"
+            - |
+              CONSUL_FULLNAME="consul-consul"
+
+              consul-k8s inject-connect \
+                -default-inject=false \
+                -consul-image="consul:1.5.0" \
+                -listen=:8080 \
+                -acl-auth-method="consul-consul-k8s-auth-method" \
+                -enable-central-config=true \
+                -tls-auto=${CONSUL_FULLNAME}-connect-injector-cfg \
+                -tls-auto-hosts=${CONSUL_FULLNAME}-connect-injector-svc,${CONSUL_FULLNAME}-connect-injector-svc.${NAMESPACE},${CONSUL_FULLNAME}-connect-injector-svc.${NAMESPACE}.svc
+          livenessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+              scheme: HTTPS
+            failureThreshold: 2
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+              scheme: HTTPS
+            failureThreshold: 2
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            successThreshold: 1
+            timeoutSeconds: 5

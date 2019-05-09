@@ -1,0 +1,21 @@
+---
+# Source: consul/templates/server-disruptionbudget.yaml
+# PodDisruptionBudget to prevent degrading the server cluster through
+# voluntary cluster changes.
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: consul-consul-server
+  namespace: default
+  labels:
+    app: consul
+    chart: consul-helm
+    heritage: Tiller
+    release: consul
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: consul
+      release: "consul"
+      component: server

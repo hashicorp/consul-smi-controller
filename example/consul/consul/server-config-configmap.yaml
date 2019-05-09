@@ -1,0 +1,30 @@
+---
+# Source: consul/templates/server-config-configmap.yaml
+# StatefulSet to run the actual Consul server cluster.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consul-consul-server-config
+  namespace: default
+  labels:
+    app: consul
+    chart: consul-helm
+    heritage: Tiller
+    release: consul
+data:
+  extra-from-values.json: |-
+    {}
+    
+  acl-config.json: |-
+    {
+      "acl": {
+        "enabled": true,
+        "default_policy": "deny",
+        "down_policy": "extend-cache",
+        "enable_token_persistence": true
+      }
+    }
+  central-config.json: |-
+    {
+      "enable_central_service_config": true
+    }

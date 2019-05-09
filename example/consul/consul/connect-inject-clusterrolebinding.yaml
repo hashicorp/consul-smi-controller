@@ -1,0 +1,20 @@
+---
+# Source: consul/templates/connect-inject-clusterrolebinding.yaml
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: consul-consul-connect-injector-webhook-admin-role-binding
+  labels:
+    app: consul
+    chart: consul-helm
+    heritage: Tiller
+    release: consul
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: consul-consul-connect-injector-webhook
+subjects:
+  - kind: ServiceAccount
+    name: consul-consul-connect-injector-webhook-svc-account
+    namespace: default

@@ -1,0 +1,3 @@
+---
+# Source: consul/templates/sync-catalog-deployment.yaml
+# The deployment for running the sync-catalog pod

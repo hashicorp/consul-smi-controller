@@ -12,7 +12,7 @@ type Consul interface {
 	DeleteIntention() error
 
 	// CreateIntention creates an intention in Consul
-	CreateIntention(in api.Intention) (bool, error)
+	CreateIntention(source string, destination string) (bool, error)
 }
 
 // ConsulImpl concrete implementation of the Consul client interface
@@ -47,7 +47,14 @@ func (c *ConsulImpl) GetIntentions() ([]*api.Intention, error) {
 }
 
 // CreateIntention creates an intention in Consul
-func (c *ConsulImpl) CreateIntention(in api.Intention) (bool, error) {
+func (c *ConsulImpl) CreateIntention(source string, destination string) (bool, error) {
+	in := api.Intention{
+		SourceName:      source,
+		DestinationName: destination,
+		Action:          api.IntentionActionAllow,
+		Description:     "Automatically added by Kubernetes",
+	}
+
 	_, _, err := c.client.Connect().IntentionCreate(&in, nil)
 	if err != nil {
 		return false, err

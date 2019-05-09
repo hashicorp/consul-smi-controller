@@ -92,6 +92,6 @@ func main() {
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
-	flag.StringVar(&consulHTTPAddr, "consul-http-token", "", "ACL Token for communicating with Consul")
-	flag.StringVar(&consulACLToken, "consul-http-addr", "http://localhost:8500", "Address of the consul server, default http://localhost:8500")
+	flag.StringVar(&consulACLToken, "consul-http-token", "", "ACL Token for communicating with Consul")
+	flag.StringVar(&consulHTTPAddr, "consul-http-addr", "http://localhost:8500", "Address of the consul server, default http://localhost:8500")
 }

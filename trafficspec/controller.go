@@ -132,6 +132,7 @@ func NewController(
 			if err != nil {
 				klog.Errorf("No TrafficTarget found for IdentifyBinding %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
 				controller.enqueueObject(obj)
+				return
 			}
 
 			labelSelectors := []string{}
@@ -147,6 +148,7 @@ func NewController(
 				Limit:         1,
 			})
 
+			// TODO: make this a bit more robust ...
 			// TODO: should we throw an error if multiple pods match the label? ... or should we create intention rules for each of them?
 			if targetPods.Size() == 0 {
 				klog.Errorf("No Pods match the labels defined in the TrafficTarget: %s", targetLabels)
@@ -164,6 +166,7 @@ func NewController(
 				if err != nil {
 					klog.Errorf("No Pod found for IdentityBinding subject %s/%s: %s", subject.Namespace, subject.Name, err.Error())
 					controller.enqueueObject(obj)
+					return
 				}
 
 				fromServices = append(fromServices, subjectPod.Spec.ServiceAccountName)
@@ -179,9 +182,9 @@ func NewController(
 					if err != nil {
 						fmt.Printf("No route for %s/%s", binding.Namespace, rule.Name)
 						controller.enqueueObject(obj)
+						return
 						// What should happen if one of the routes referenced does not exist? should we fail?
 						// What if someone deletes a TCPRoute? <- it should probably not be possible to delete a route that is referenced by a TrafficTarget.
-						break
 					}
 
 					containsTCPRoute = true
@@ -189,9 +192,18 @@ func NewController(
 				}
 			}
 
-			fmt.Printf("did we find a route? %t\n\n", containsTCPRoute)
+			if !containsTCPRoute {
+				controller.enqueueObject(obj)
+				return
+			}
 
 			fmt.Printf("creating intention from: %#v, to: %#v", fromServices, toService)
+			for _, fromService := range fromServices {
+				_, err := controller.consulClient.CreateIntention(fromService, toService)
+				if err != nil {
+					klog.Errorf("We fucked up: %s", err.Error())
+				}
+			}
 
 			// Intention
 			// Create an intention that allows traffic from "FROM" to "TO"

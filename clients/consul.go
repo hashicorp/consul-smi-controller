@@ -4,9 +4,8 @@ import "github.com/hashicorp/consul/api"
 
 // Consul defines an interface for a Consul client
 type Consul interface {
-	// GetIntentions returns a list of intentions currently configured in
-	// Consul
-	GetIntentions() ([]*api.Intention, error)
+	// IntentionsExists returns true of false if the intention exists or not
+	IntentionExists(source string, destination string) (bool, error)
 
 	// DeleteIntention deletes an intention in Consul
 	DeleteIntention() error
@@ -34,20 +33,34 @@ func NewConsul(httpAddr, aclToken string) (Consul, error) {
 	return &ConsulImpl{cli}, nil
 }
 
-// GetIntentions returns a list of intentions currently configured in
-// Consul
-func (c *ConsulImpl) GetIntentions() ([]*api.Intention, error) {
-	var intentions []*api.Intention
-	intentions, _, err := c.client.Connect().Intentions(nil)
-	if err != nil {
-		return intentions, err
+// IntentionExists returns true of false if the intention exists or not
+func (c *ConsulImpl) IntentionExists(source string, destination string) (bool, error) {
+	args := api.IntentionCheck{
+		Source:      source,
+		Destination: destination,
 	}
 
-	return intentions, nil
+	ok, _, err := c.client.Connect().IntentionCheck(&args, nil)
+	if err != nil {
+		return false, err
+	}
+
+	return ok, nil
 }
 
 // CreateIntention creates an intention in Consul
 func (c *ConsulImpl) CreateIntention(source string, destination string) (bool, error) {
+	// first check to see if we need to create
+	ok, err := c.IntentionExists(source, destination)
+	if err != nil {
+		return false, err
+	}
+
+	// if we have an intention just return
+	if ok {
+		return false, nil
+	}
+
 	in := api.Intention{
 		SourceName:      source,
 		DestinationName: destination,
@@ -55,7 +68,7 @@ func (c *ConsulImpl) CreateIntention(source string, destination string) (bool, e
 		Description:     "Automatically added by Kubernetes",
 	}
 
-	_, _, err := c.client.Connect().IntentionCreate(&in, nil)
+	_, _, err = c.client.Connect().IntentionCreate(&in, nil)
 	if err != nil {
 		return false, err
 	}

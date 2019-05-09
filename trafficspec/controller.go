@@ -199,9 +199,17 @@ func NewController(
 
 			fmt.Printf("creating intention from: %#v, to: %#v", fromServices, toService)
 			for _, fromService := range fromServices {
-				_, err := controller.consulClient.CreateIntention(fromService, toService)
+				ok, err := controller.consulClient.CreateIntention(fromService, toService)
 				if err != nil {
 					klog.Errorf("Unable to create intention: %s", err.Error())
+					controller.enqueueObject(obj)
+					return
+				}
+
+				if ok {
+					klog.Info("Intention successfully created")
+				} else {
+					klog.Info("Intention not created")
 				}
 			}
 

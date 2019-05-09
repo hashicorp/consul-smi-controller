@@ -201,7 +201,7 @@ func NewController(
 			for _, fromService := range fromServices {
 				_, err := controller.consulClient.CreateIntention(fromService, toService)
 				if err != nil {
-					klog.Errorf("We fucked up: %s", err.Error())
+					klog.Errorf("Unable to create intention: %s", err.Error())
 				}
 			}
 

@@ -59,11 +59,13 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: service-a
+  annotations:
+    "consul.hashicorp.com/connect-inject": "true"
   labels:
     app: service-a
 spec:
   serviceAccountName: service-a
-  automountServiceAccountToken: false
+  automountServiceAccountToken: true
   containers:
   - name: nginx
     image: nginx
@@ -75,11 +77,13 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: service-b
+  annotations:
+    "consul.hashicorp.com/connect-inject": "true"
   labels:
     app: service-b
 spec:
   serviceAccountName: service-b
-  automountServiceAccountToken: false
+  automountServiceAccountToken: true
   containers:
   - name: nginx
     image: nginx

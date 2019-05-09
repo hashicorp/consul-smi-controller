@@ -27,7 +27,7 @@ function open_service() {
 
 case "$1" in
   consul)
-    CONSUL_ACL_TOKEN=$(kubectl get secret consul-consul-client-acl-token -o json | jq -r '.data.token' | base64 -d)
+    CONSUL_ACL_TOKEN=$(kubectl get secret consul-consul-bootstrap-acl-token -o json | jq -r '.data.token' | base64 -d)
     echo "Consul ACL Token: ${CONSUL_ACL_TOKEN}"
     echo "Consul HTTP Address: http://localhost:18500"
     echo ""

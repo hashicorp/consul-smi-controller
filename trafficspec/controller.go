@@ -133,14 +133,13 @@ func NewController(
 				controller.enqueueObject(obj)
 			}
 
-			// Get the pods that are referenced by the TrafficTarget.
-			targetPod, err := kubeclientset.CoreV1().Pods(binding.Namespace).Get(binding.TargetRef.Name, v1.GetOptions{})
-			if err != nil {
-				klog.Errorf("No Pod found for TrafficTarget %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
-				controller.enqueueObject(obj)
-			}
+			// Get a "list" of pods that have the correct label.
+			targetPods, err := kubeclientset.CoreV1().Pods(binding.Namespace).List(v1.ListOptions{
+				LabelSelector: fmt.Sprintf("app=%s", target.Selector.MatchLabels["app"]),
+				Limit:         1,
+			})
 
-			toService := targetPod.Spec.ServiceAccountName
+			toService := targetPods.Items[0].Spec.ServiceAccountName
 			fromServices := make([]string, 0)
 
 			// FROM

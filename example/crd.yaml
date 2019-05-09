@@ -2,7 +2,7 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:  
-  name: traffictargets.smi-spec.io
+  name: traffictargets.access.smi-spec.io
 spec:  
   group: smi-spec.io
   version: v1alpha1
@@ -18,7 +18,7 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:  
-  name: identitybindings.smi-spec.io
+  name: identitybindings.access.smi-spec.io
 spec:  
   group: smi-spec.io
   version: v1alpha1
@@ -26,7 +26,7 @@ spec:
   names:    
     kind: IdentityBinding
     shortNames: 
-      - ib
+      - ibs
     plural: identitybindings
     singular: identitybinding
 
@@ -34,17 +34,17 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:  
-  name: httproutes.smi-spec.io
+  name: httproutegroups.spec.smi-spec.io
 spec:  
   group: smi-spec.io
   version: v1alpha1
   scope: Namespaced 
   names:    
-    kind: HTTPRoute
+    kind: HTTPRouteGroup
     shortNames: 
       - htr
-    plural: httproutes
-    singular: httproute
+    plural: httproutegroups
+    singular: httproutegroup
 
 ---
 apiVersion: apiextensions.k8s.io/v1beta1

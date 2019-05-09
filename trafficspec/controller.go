@@ -14,6 +14,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -133,11 +134,23 @@ func NewController(
 				controller.enqueueObject(obj)
 			}
 
-			// Get a "list" of pods that have the correct label.
+			labelSelectors := []string{}
+			for k, v := range target.Selector.MatchLabels {
+				labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%s", k, v))
+			}
+
+			targetLabels := strings.Join(labelSelectors, ",")
+
+			// Get a "list" of pods that have the correct labels.
 			targetPods, err := kubeclientset.CoreV1().Pods(binding.Namespace).List(v1.ListOptions{
-				LabelSelector: fmt.Sprintf("app=%s", target.Selector.MatchLabels["app"]),
+				LabelSelector: targetLabels,
 				Limit:         1,
 			})
+
+			// TODO: should we throw an error if multiple pods match the label? ... or should we create intention rules for each of them?
+			if targetPods.Size() == 0 {
+				klog.Errorf("No Pods match the labels defined in the TrafficTarget: %s", targetLabels)
+			}
 
 			toService := targetPods.Items[0].Spec.ServiceAccountName
 			fromServices := make([]string, 0)

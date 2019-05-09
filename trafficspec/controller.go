@@ -14,6 +14,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -55,26 +56,16 @@ const (
 
 // Controller is the controller implementation for Foo resources
 type Controller struct {
-	// kubeclientset is a standard kubernetes clientset
-	kubeclientset kubernetes.Interface
-	// sampleclientset is a clientset for our own API group
-	smiclientset clientset.Interface
-
+	kubeclientset  kubernetes.Interface
+	smiclientset   clientset.Interface
 	bindingLister  listers.IdentityBindingLister
 	bindingSynced  cache.InformerSynced
 	targetLister   listers.TrafficTargetLister
 	targetSynced   cache.InformerSynced
 	tcpRouteLister listers.TCPRouteLister
 	tcpRouteSynced cache.InformerSynced
-	// workqueue is a rate limited work queue. This is used to queue work to be
-	// processed instead of performing it as soon as a change happens. This
-	// means we can ensure we only process a fixed amount of resources at a
-	// time, and makes it easy to ensure we are never processing the same item
-	// simultaneously in two different workers.
-	workqueue workqueue.RateLimitingInterface
-	// recorder is an event recorder for recording Event resources to the
-	// Kubernetes API.
-	recorder record.EventRecorder
+	workqueue      workqueue.RateLimitingInterface
+	recorder       record.EventRecorder
 }
 
 // NewController returns a new sample controller
@@ -87,8 +78,8 @@ func NewController(
 ) *Controller {
 
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
-	// logged for sample-controller types.
+	// Add smi-controller types to the default Kubernetes Scheme so Events can be
+	// logged for smi-controller types.
 	utilruntime.Must(trafficspecscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
@@ -110,35 +101,50 @@ func NewController(
 	}
 
 	klog.Info("Setting up event handlers")
-	// Set up an event handler for when Foo resources change
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			// Log that we have created a TrafficTarget
+			klog.Info("TrafficTarget created")
+			controller.enqueueObject(obj)
 		},
 		UpdateFunc: func(old, new interface{}) {
-			// TODO think what to do.
+			klog.Info("TrafficTarget updated")
+			controller.enqueueObject(new)
 		},
 		DeleteFunc: func(obj interface{}) {
 			// TODO think what to do (probably clean up bindings that were referenced)
+			klog.Info("TrafficTarget deleted")
+			controller.enqueueObject(obj)
 		},
 	})
 
 	bindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			fmt.Printf("adding binding: %#v\n\n", obj)
-			// TO
+			klog.Info("IdentifyBinding created")
 			binding := obj.(*trafficspecv1alpha1.IdentityBinding)
 
-			// Get the TrafficTarget name and look it up.
-			targetName := binding.TargetRef.Name
+			// TO
+			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(binding.TargetRef.Name)
+			if err != nil {
+				klog.Errorf("No TrafficTarget found for IdentifyBinding %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
+				controller.enqueueObject(obj)
+			}
 
 			// Get the pods that are referenced by the TrafficTarget.
-			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(targetName)
+			targetPod, err := kubeclientset.CoreV1().Pods(binding.Namespace).Get(binding.TargetRef.Name, v1.GetOptions{})
 			if err != nil {
-				fmt.Printf("No target for binding %s/%s\n\n", binding.Namespace, targetName)
+				klog.Errorf("No Pod found for TrafficTarget %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
+				controller.enqueueObject(obj)
 			}
 
 			// Look for a service account for that pod.
+			targetServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(binding.Namespace).Get(targetPod.Spec.ServiceAccountName, v1.GetOptions{})
+			if err != nil {
+				klog.Errorf("No ServiceAccount found with name %s for Pod %s/%s: %s", targetPod.Spec.ServiceAccountName, binding.Namespace, binding.TargetRef.Name, err.Error())
+				controller.enqueueObject(obj)
+			}
+
+			fmt.Printf("Got service account: %#v\n\n", targetServiceAccount.Secrets)
+
 			// Look up the service name through Consul Auth Method API.
 
 			// FROM
@@ -146,18 +152,38 @@ func NewController(
 			bindingSubjects := binding.Subjects
 			for _, subject := range bindingSubjects {
 				// Use namespace and name to look up pod
+				subjectPod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
+				if err != nil {
+					klog.Errorf("No Pod found for IdentityBinding subject %s/%s: %s", subject.Namespace, subject.Name, err.Error())
+					controller.enqueueObject(obj)
+				}
+
 				// then grab a service account from that pod.
-				pod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
+				subjectServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(subjectPod.Spec.ServiceAccountName, v1.GetOptions{})
 				if err != nil {
-					fmt.Printf("No pod for %s/%s", subject.Namespace, subject.Name)
+					klog.Errorf("No ServiceAccount found with name %s for Pod %s/%s: %s", subjectPod.Spec.ServiceAccountName, subject.Namespace, subject.Name, err.Error())
+					controller.enqueueObject(obj)
 				}
 
-				serviceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(pod.Spec.ServiceAccountName, v1.GetOptions{})
-				if err != nil {
-					fmt.Printf("No service account for %s/%s for pod %s/%s", subject.Namespace, pod.Spec.ServiceAccountName, subject.Namespace, subject.Name)
+				fmt.Printf("Got service account: %#v\n\n", subjectServiceAccount.Secrets)
+
+				var secretName string
+				for _, secret := range subjectServiceAccount.Secrets {
+					if strings.HasPrefix(secret.Name, fmt.Sprintf("%s-token", subjectServiceAccount.Name)) {
+						secretName = secret.Name
+						break
+					}
 				}
 
-				fmt.Printf("Got service account: %#v\n\n", serviceAccount)
+				secret, err := kubeclientset.CoreV1().Secrets(subject.Namespace).Get(secretName, v1.GetOptions{})
+				if err != nil {
+					klog.Errorf("No Secret found with name %s: %s", secretName, err.Error())
+					fmt.Printf("No secret for %s", secretName)
+					controller.enqueueObject(obj)
+				}
+
+				klog.Infof("token: %#v", secret.Data["token"])
+
 			}
 
 			// Get the ServiceAccount from the Subjects and look up in Consul (Auth Method API) to get the service name.
@@ -165,11 +191,13 @@ func NewController(
 			// Validate that there is a TCP route (if the traffic target references Kind TCPRoute)
 			// If it does not exist, show error and stop processing.
 			containsTCPRoute := false
+			fmt.Printf("The target (%s) is: %#v\n---\n", binding.TargetRef.Name, target)
 			for _, rule := range target.Rules {
 				if rule.Kind == "TCPRoute" {
 					rule, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(rule.Name)
 					if err != nil {
 						fmt.Printf("No route for %s/%s", binding.Namespace, rule.Name)
+						controller.enqueueObject(obj)
 						// What should happen if one of the routes referenced does not exist? should we fail?
 						// What if someone deletes a TCPRoute? <- it should probably not be possible to delete a route that is referenced by a TrafficTarget.
 						break
@@ -200,8 +228,10 @@ func NewController(
 		},
 		UpdateFunc: func(old, new interface{}) {
 			// TODO think what to do here
+			controller.enqueueObject(new)
 		},
 		DeleteFunc: func(obj interface{}) {
+			controller.enqueueObject(obj)
 			// TO
 			// Get the TrafficTarget name and look it up.
 			// Get the pods that are referenced by the TrafficTarget.
@@ -361,7 +391,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	fmt.Printf("synching %s", target)
+	fmt.Printf("synching %#v", target)
 
 	// deploymentName := target.Spec.DeploymentName
 	// if deploymentName == "" {
@@ -437,15 +467,15 @@ func (c *Controller) syncHandler(key string) error {
 // enqueueFoo takes a Foo resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Foo.
-// func (c *Controller) enqueueFoo(obj interface{}) {
-// 	var key string
-// 	var err error
-// 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-// 		utilruntime.HandleError(err)
-// 		return
-// 	}
-// 	c.workqueue.Add(key)
-// }
+func (c *Controller) enqueueObject(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.Add(key)
+}
 
 // handleObject will take any resource implementing metav1.Object and attempt
 // to find the Foo resource that 'owns' it. It does this by looking at the
@@ -453,15 +483,15 @@ func (c *Controller) syncHandler(key string) error {
 // It then enqueues that Foo resource to be processed. If the object does not
 // have an appropriate OwnerReference, it will simply be skipped.
 // func (c *Controller) handleObject(obj interface{}) {
-// 	var object metav1.Object
+// 	var object v1.Object
 // 	var ok bool
-// 	if object, ok = obj.(metav1.Object); !ok {
+// 	if object, ok = obj.(v1.Object); !ok {
 // 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 // 		if !ok {
 // 			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
 // 			return
 // 		}
-// 		object, ok = tombstone.Obj.(metav1.Object)
+// 		object, ok = tombstone.Obj.(v1.Object)
 // 		if !ok {
 // 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 // 			return
@@ -469,7 +499,7 @@ func (c *Controller) syncHandler(key string) error {
 // 		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 // 	}
 // 	klog.V(4).Infof("Processing object: %s", object.GetName())
-// 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+// 	if ownerRef := v1.GetControllerOf(object); ownerRef != nil {
 // 		// If this object is not owned by a Foo, we should not do anything more
 // 		// with it.
 // 		if ownerRef.Kind != "TrafficTarget" {

@@ -18,7 +18,7 @@ selector:
 port: 8080
 rules:
 - kind: TCPRoute
-  name: tcp-route
+  name: service-a-tcp-route
 
 # IdentityBinding defines services which are allowed to connect on the
 # TrafficTarget routes

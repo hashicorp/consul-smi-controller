@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
@@ -162,7 +163,7 @@ func NewController(
 			fmt.Printf("The target (%s) is: %#v\n---\n", binding.TargetRef.Name, target)
 			for _, rule := range target.Rules {
 				if rule.Kind == "TCPRoute" {
-					rule, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(rule.Name)
+					_, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(rule.Name)
 					if err != nil {
 						fmt.Printf("No route for %s/%s", binding.Namespace, rule.Name)
 						controller.enqueueObject(obj)

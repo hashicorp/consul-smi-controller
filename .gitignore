@@ -1,1 +1,2 @@
 bin/**
+.pid_consul-consul-server

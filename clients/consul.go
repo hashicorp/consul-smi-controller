@@ -4,11 +4,6 @@ import "github.com/hashicorp/consul/api"
 
 // Consul defines an interface for a Consul client
 type Consul interface {
-	// LookupServiceWithJWT allows you to lookup a service in consul using a
-	// Kubernetes service token. This requires that the service has been configured
-	// to use ACL Auth Mounts
-	LookupServiceWithJWT(jwt string) (string, error)
-
 	// GetIntentions returns a list of intentions currently configured in
 	// Consul
 	GetIntentions() ([]*api.Intention, error)
@@ -27,13 +22,12 @@ type ConsulImpl struct {
 
 // NewConsul creates a new Consul client
 func NewConsul(c api.Config) (Consul, error) {
-	return nil, nil
-}
+	cli, err := api.NewClient(&c)
+	if err != nil {
+		return nil, err
+	}
 
-// LookupServiceWithJWT looks up a Connect service using a K8s JWT
-func (c *ConsulImpl) LookupServiceWithJWT(jwt string) (string, error) {
-	//c.client.ACL().
-	return "", nil
+	return &ConsulImpl{cli}, nil
 }
 
 // GetIntentions returns a list of intentions currently configured in
@@ -56,4 +50,9 @@ func (c *ConsulImpl) CreateIntention(in api.Intention) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// DeleteIntention deletes an intention in Consul
+func (c *ConsulImpl) DeleteIntention() error {
+	return nil
 }

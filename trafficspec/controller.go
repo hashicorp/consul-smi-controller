@@ -14,7 +14,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -136,16 +135,8 @@ func NewController(
 				controller.enqueueObject(obj)
 			}
 
-			// Look for a service account for that pod.
-			targetServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(binding.Namespace).Get(targetPod.Spec.ServiceAccountName, v1.GetOptions{})
-			if err != nil {
-				klog.Errorf("No ServiceAccount found with name %s for Pod %s/%s: %s", targetPod.Spec.ServiceAccountName, binding.Namespace, binding.TargetRef.Name, err.Error())
-				controller.enqueueObject(obj)
-			}
-
-			fmt.Printf("Got service account: %#v\n\n", targetServiceAccount.Secrets)
-
-			// Look up the service name through Consul Auth Method API.
+			toService := targetPod.Spec.ServiceAccountName
+			fromServices := make([]string, 0)
 
 			// FROM
 			// Get the Subjects from the IdentifyBinding.
@@ -158,35 +149,8 @@ func NewController(
 					controller.enqueueObject(obj)
 				}
 
-				// then grab a service account from that pod.
-				subjectServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(subjectPod.Spec.ServiceAccountName, v1.GetOptions{})
-				if err != nil {
-					klog.Errorf("No ServiceAccount found with name %s for Pod %s/%s: %s", subjectPod.Spec.ServiceAccountName, subject.Namespace, subject.Name, err.Error())
-					controller.enqueueObject(obj)
-				}
-
-				fmt.Printf("Got service account: %#v\n\n", subjectServiceAccount.Secrets)
-
-				var secretName string
-				for _, secret := range subjectServiceAccount.Secrets {
-					if strings.HasPrefix(secret.Name, fmt.Sprintf("%s-token", subjectServiceAccount.Name)) {
-						secretName = secret.Name
-						break
-					}
-				}
-
-				secret, err := kubeclientset.CoreV1().Secrets(subject.Namespace).Get(secretName, v1.GetOptions{})
-				if err != nil {
-					klog.Errorf("No Secret found with name %s: %s", secretName, err.Error())
-					fmt.Printf("No secret for %s", secretName)
-					controller.enqueueObject(obj)
-				}
-
-				klog.Infof("token: %#v", secret.Data["token"])
-
+				fromServices = append(fromServices, subjectPod.Spec.ServiceAccountName)
 			}
-
-			// Get the ServiceAccount from the Subjects and look up in Consul (Auth Method API) to get the service name.
 
 			// Validate that there is a TCP route (if the traffic target references Kind TCPRoute)
 			// If it does not exist, show error and stop processing.
@@ -209,6 +173,8 @@ func NewController(
 			}
 
 			fmt.Printf("did we find a route? %t\n\n", containsTCPRoute)
+
+			fmt.Printf("creating intention from: %#v, to: %#v", fromServices, toService)
 
 			// Intention
 			// Create an intention that allows traffic from "FROM" to "TO"

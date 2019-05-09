@@ -61,6 +61,7 @@ metadata:
   name: service-a
   annotations:
     "consul.hashicorp.com/connect-inject": "true"
+    "consul.hashicorp.com/connect-service": "service-a"
   labels:
     app: service-a
 spec:
@@ -79,6 +80,7 @@ metadata:
   name: service-b
   annotations:
     "consul.hashicorp.com/connect-inject": "true"
+    "consul.hashicorp.com/connect-service": "service-b"
   labels:
     app: service-b
 spec:

@@ -96,7 +96,7 @@ spec:
                 - consul leave
           ports:
             - containerPort: 8500
-              hostPort: 8500
+              hostPort: 30001
               name: http
             - containerPort: 8502
               hostPort: 8502

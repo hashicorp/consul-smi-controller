@@ -1,6 +1,6 @@
 # TCPRoute for Service A 
 ---
-apiVersion: smi-spec.io/v1alpha1
+apiVersion: spec.smi-spec.io/v1alpha1
 kind: TCPRoute
 metadata:
   name: service-a-tcp-route
@@ -8,7 +8,7 @@ metadata:
 # TrafficTarget defines allowed routes for a service
 ---
 kind: TrafficTarget
-apiVersion: smi-spec.io/v1alpha1
+apiVersion: access.smi-spec.io/v1alpha1
 metadata:
   name: foo
   namespace: default
@@ -25,7 +25,7 @@ rules:
 # TrafficTarget will always be in the same namespace as the IdentityBinding
 ---
 kind: IdentityBinding
-apiVersion: smi-spec.io/v1alpha1
+apiVersion: access.smi-spec.io/v1alpha1
 metadata:
   name: account-specific
   namespace: default

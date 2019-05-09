@@ -56,26 +56,16 @@ const (
 
 // Controller is the controller implementation for Foo resources
 type Controller struct {
-	// kubeclientset is a standard kubernetes clientset
-	kubeclientset kubernetes.Interface
-	// sampleclientset is a clientset for our own API group
-	smiclientset clientset.Interface
-
+	kubeclientset  kubernetes.Interface
+	smiclientset   clientset.Interface
 	bindingLister  listers.IdentityBindingLister
 	bindingSynced  cache.InformerSynced
 	targetLister   listers.TrafficTargetLister
 	targetSynced   cache.InformerSynced
 	tcpRouteLister listers.TCPRouteLister
 	tcpRouteSynced cache.InformerSynced
-	// workqueue is a rate limited work queue. This is used to queue work to be
-	// processed instead of performing it as soon as a change happens. This
-	// means we can ensure we only process a fixed amount of resources at a
-	// time, and makes it easy to ensure we are never processing the same item
-	// simultaneously in two different workers.
-	workqueue workqueue.RateLimitingInterface
-	// recorder is an event recorder for recording Event resources to the
-	// Kubernetes API.
-	recorder record.EventRecorder
+	workqueue      workqueue.RateLimitingInterface
+	recorder       record.EventRecorder
 }
 
 // NewController returns a new sample controller
@@ -88,8 +78,8 @@ func NewController(
 ) *Controller {
 
 	// Create event broadcaster
-	// Add sample-controller types to the default Kubernetes Scheme so Events can be
-	// logged for sample-controller types.
+	// Add smi-controller types to the default Kubernetes Scheme so Events can be
+	// logged for smi-controller types.
 	utilruntime.Must(trafficspecscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
@@ -111,45 +101,45 @@ func NewController(
 	}
 
 	klog.Info("Setting up event handlers")
-	// Set up an event handler for when Foo resources change
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			// Log that we have created a TrafficTarget
+			klog.Info("TrafficTarget created")
 			controller.enqueueObject(obj)
 		},
 		UpdateFunc: func(old, new interface{}) {
-			// TODO think what to do.
+			klog.Info("TrafficTarget updated")
 			controller.enqueueObject(new)
 		},
 		DeleteFunc: func(obj interface{}) {
 			// TODO think what to do (probably clean up bindings that were referenced)
+			klog.Info("TrafficTarget deleted")
 			controller.enqueueObject(obj)
 		},
 	})
 
 	bindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			fmt.Printf("adding binding: %#v\n\n", obj)
+			klog.Info("IdentifyBinding created")
 			binding := obj.(*trafficspecv1alpha1.IdentityBinding)
 
 			// TO
 			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(binding.TargetRef.Name)
 			if err != nil {
-				fmt.Printf("No target for binding %s/%s\n\n", binding.Namespace, binding.TargetRef.Name)
+				klog.Errorf("No TrafficTarget found for IdentifyBinding %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
 				controller.enqueueObject(obj)
 			}
 
 			// Get the pods that are referenced by the TrafficTarget.
 			targetPod, err := kubeclientset.CoreV1().Pods(binding.Namespace).Get(binding.TargetRef.Name, v1.GetOptions{})
 			if err != nil {
-				fmt.Printf("No pod for %s/%s", binding.Namespace, binding.TargetRef.Name)
+				klog.Errorf("No Pod found for TrafficTarget %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
 				controller.enqueueObject(obj)
 			}
 
 			// Look for a service account for that pod.
 			targetServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(binding.Namespace).Get(targetPod.Spec.ServiceAccountName, v1.GetOptions{})
 			if err != nil {
-				fmt.Printf("No service account for %s/%s for pod %s/%s", binding.Namespace, targetPod.Spec.ServiceAccountName, binding.Namespace, binding.TargetRef.Name)
+				klog.Errorf("No ServiceAccount found with name %s for Pod %s/%s: %s", targetPod.Spec.ServiceAccountName, binding.Namespace, binding.TargetRef.Name, err.Error())
 				controller.enqueueObject(obj)
 			}
 
@@ -164,14 +154,14 @@ func NewController(
 				// Use namespace and name to look up pod
 				subjectPod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
 				if err != nil {
-					fmt.Printf("No pod for %s/%s", subject.Namespace, subject.Name)
+					klog.Errorf("No Pod found for IdentityBinding subject %s/%s: %s", subject.Namespace, subject.Name, err.Error())
 					controller.enqueueObject(obj)
 				}
 
 				// then grab a service account from that pod.
 				subjectServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(subjectPod.Spec.ServiceAccountName, v1.GetOptions{})
 				if err != nil {
-					fmt.Printf("No service account for %s/%s for pod %s/%s", subject.Namespace, subjectPod.Spec.ServiceAccountName, subject.Namespace, subject.Name)
+					klog.Errorf("No ServiceAccount found with name %s for Pod %s/%s: %s", subjectPod.Spec.ServiceAccountName, subject.Namespace, subject.Name, err.Error())
 					controller.enqueueObject(obj)
 				}
 
@@ -187,14 +177,12 @@ func NewController(
 
 				secret, err := kubeclientset.CoreV1().Secrets(subject.Namespace).Get(secretName, v1.GetOptions{})
 				if err != nil {
+					klog.Errorf("No Secret found with name %s: %s", secretName, err.Error())
 					fmt.Printf("No secret for %s", secretName)
 					controller.enqueueObject(obj)
 				}
 
-				fmt.Printf("%s\n---------\n", secretName)
-				fmt.Printf("secret: %#v\n\n", secret)
-
-				// fmt.Printf("token: %#v", secret.Data["token"])
+				klog.Infof("token: %#v", secret.Data["token"])
 
 			}
 
@@ -403,7 +391,7 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 
-	fmt.Printf("synching %s", target)
+	fmt.Printf("synching %#v", target)
 
 	// deploymentName := target.Spec.DeploymentName
 	// if deploymentName == "" {

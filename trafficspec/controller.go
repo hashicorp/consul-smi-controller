@@ -130,20 +130,31 @@ func NewController(
 	bindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			fmt.Printf("adding binding: %#v\n\n", obj)
-			// TO
 			binding := obj.(*trafficspecv1alpha1.IdentityBinding)
 
-			// Get the TrafficTarget name and look it up.
-			targetName := binding.TargetRef.Name
+			// TO
+			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(binding.TargetRef.Name)
+			if err != nil {
+				fmt.Printf("No target for binding %s/%s\n\n", binding.Namespace, binding.TargetRef.Name)
+				controller.enqueueObject(obj)
+			}
 
 			// Get the pods that are referenced by the TrafficTarget.
-			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(targetName)
+			targetPod, err := kubeclientset.CoreV1().Pods(binding.Namespace).Get(binding.TargetRef.Name, v1.GetOptions{})
 			if err != nil {
-				fmt.Printf("No target for binding %s/%s\n\n", binding.Namespace, targetName)
+				fmt.Printf("No pod for %s/%s", binding.Namespace, binding.TargetRef.Name)
 				controller.enqueueObject(obj)
 			}
 
 			// Look for a service account for that pod.
+			targetServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(binding.Namespace).Get(targetPod.Spec.ServiceAccountName, v1.GetOptions{})
+			if err != nil {
+				fmt.Printf("No service account for %s/%s for pod %s/%s", binding.Namespace, targetPod.Spec.ServiceAccountName, binding.Namespace, binding.TargetRef.Name)
+				controller.enqueueObject(obj)
+			}
+
+			fmt.Printf("Got service account: %#v\n\n", targetServiceAccount.Secrets)
+
 			// Look up the service name through Consul Auth Method API.
 
 			// FROM
@@ -151,24 +162,24 @@ func NewController(
 			bindingSubjects := binding.Subjects
 			for _, subject := range bindingSubjects {
 				// Use namespace and name to look up pod
-				// then grab a service account from that pod.
-				pod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
+				subjectPod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
 				if err != nil {
 					fmt.Printf("No pod for %s/%s", subject.Namespace, subject.Name)
 					controller.enqueueObject(obj)
 				}
 
-				serviceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(pod.Spec.ServiceAccountName, v1.GetOptions{})
+				// then grab a service account from that pod.
+				subjectServiceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(subjectPod.Spec.ServiceAccountName, v1.GetOptions{})
 				if err != nil {
-					fmt.Printf("No service account for %s/%s for pod %s/%s", subject.Namespace, pod.Spec.ServiceAccountName, subject.Namespace, subject.Name)
+					fmt.Printf("No service account for %s/%s for pod %s/%s", subject.Namespace, subjectPod.Spec.ServiceAccountName, subject.Namespace, subject.Name)
 					controller.enqueueObject(obj)
 				}
 
-				fmt.Printf("Got service account: %#v\n\n", serviceAccount.Secrets)
+				fmt.Printf("Got service account: %#v\n\n", subjectServiceAccount.Secrets)
 
 				var secretName string
-				for _, secret := range serviceAccount.Secrets {
-					if strings.HasPrefix(secret.Name, fmt.Sprintf("%s-token", serviceAccount.Name)) {
+				for _, secret := range subjectServiceAccount.Secrets {
+					if strings.HasPrefix(secret.Name, fmt.Sprintf("%s-token", subjectServiceAccount.Name)) {
 						secretName = secret.Name
 						break
 					}
@@ -192,7 +203,7 @@ func NewController(
 			// Validate that there is a TCP route (if the traffic target references Kind TCPRoute)
 			// If it does not exist, show error and stop processing.
 			containsTCPRoute := false
-			fmt.Printf("The target (%s) is: %#v\n---\n", targetName, target)
+			fmt.Printf("The target (%s) is: %#v\n---\n", binding.TargetRef.Name, target)
 			for _, rule := range target.Rules {
 				if rule.Kind == "TCPRoute" {
 					rule, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(rule.Name)

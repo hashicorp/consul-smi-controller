@@ -66,6 +66,8 @@ github.com/deislabs/smi-sdk-go v0.0.0-20190508195623-e8367eed0237/go.mod h1:oVRy
 github.com/deislabs/smi-sdk-go v0.0.0-20190508214341-8d9ad1bf613b h1:vJe9vHvDoDtzd3SHxETXDbvmUstgQsubK9j6x1yhzf0=
 github.com/deislabs/smi-sdk-go v0.0.0-20190509044542-31dde7317b2b h1:7JMACJ5J0EDiU89O2MAAB5Lb30yF9ABHR4GJ4+8vldc=
 github.com/deislabs/smi-sdk-go v0.0.0-20190509044542-31dde7317b2b/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
+github.com/deislabs/smi-sdk-go v0.0.0-20190509173626-b294f66d27c3 h1:2CsXtorLiYrq+OCtMeTWWGcgKUEGYpv3X/Eus5Fp2hg=
+github.com/deislabs/smi-sdk-go v0.0.0-20190509173626-b294f66d27c3/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
 github.com/denisenkom/go-mssqldb v0.0.0-20180620032804-94c9c97e8c9f/go.mod h1:xN/JuLBIz4bjkxNmByTiV1IbhfnYb6oo99phBn4Eqhc=
 github.com/denverdino/aliyungo v0.0.0-20170926055100-d3308649c661/go.mod h1:dV8lFg6daOBZbT6/BDGIz6Y3WFGn8juu6G+CQ6LHtl0=
 github.com/dgrijalva/jwt-go v0.0.0-20160705203006-01aeca54ebda/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=

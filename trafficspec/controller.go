@@ -14,6 +14,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -114,12 +115,15 @@ func NewController(
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			// Log that we have created a TrafficTarget
+			controller.enqueueObject(obj)
 		},
 		UpdateFunc: func(old, new interface{}) {
 			// TODO think what to do.
+			controller.enqueueObject(new)
 		},
 		DeleteFunc: func(obj interface{}) {
 			// TODO think what to do (probably clean up bindings that were referenced)
+			controller.enqueueObject(obj)
 		},
 	})
 
@@ -136,6 +140,7 @@ func NewController(
 			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(targetName)
 			if err != nil {
 				fmt.Printf("No target for binding %s/%s\n\n", binding.Namespace, targetName)
+				controller.enqueueObject(obj)
 			}
 
 			// Look for a service account for that pod.
@@ -150,14 +155,36 @@ func NewController(
 				pod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
 				if err != nil {
 					fmt.Printf("No pod for %s/%s", subject.Namespace, subject.Name)
+					controller.enqueueObject(obj)
 				}
 
 				serviceAccount, err := kubeclientset.CoreV1().ServiceAccounts(subject.Namespace).Get(pod.Spec.ServiceAccountName, v1.GetOptions{})
 				if err != nil {
 					fmt.Printf("No service account for %s/%s for pod %s/%s", subject.Namespace, pod.Spec.ServiceAccountName, subject.Namespace, subject.Name)
+					controller.enqueueObject(obj)
 				}
 
-				fmt.Printf("Got service account: %#v\n\n", serviceAccount)
+				fmt.Printf("Got service account: %#v\n\n", serviceAccount.Secrets)
+
+				var secretName string
+				for _, secret := range serviceAccount.Secrets {
+					if strings.HasPrefix(secret.Name, fmt.Sprintf("%s-token", serviceAccount.Name)) {
+						secretName = secret.Name
+						break
+					}
+				}
+
+				secret, err := kubeclientset.CoreV1().Secrets(subject.Namespace).Get(secretName, v1.GetOptions{})
+				if err != nil {
+					fmt.Printf("No secret for %s", secretName)
+					controller.enqueueObject(obj)
+				}
+
+				fmt.Printf("%s\n---------\n", secretName)
+				fmt.Printf("secret: %#v\n\n", secret)
+
+				// fmt.Printf("token: %#v", secret.Data["token"])
+
 			}
 
 			// Get the ServiceAccount from the Subjects and look up in Consul (Auth Method API) to get the service name.
@@ -165,11 +192,13 @@ func NewController(
 			// Validate that there is a TCP route (if the traffic target references Kind TCPRoute)
 			// If it does not exist, show error and stop processing.
 			containsTCPRoute := false
+			fmt.Printf("The target (%s) is: %#v\n---\n", targetName, target)
 			for _, rule := range target.Rules {
 				if rule.Kind == "TCPRoute" {
 					rule, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(rule.Name)
 					if err != nil {
 						fmt.Printf("No route for %s/%s", binding.Namespace, rule.Name)
+						controller.enqueueObject(obj)
 						// What should happen if one of the routes referenced does not exist? should we fail?
 						// What if someone deletes a TCPRoute? <- it should probably not be possible to delete a route that is referenced by a TrafficTarget.
 						break
@@ -200,8 +229,10 @@ func NewController(
 		},
 		UpdateFunc: func(old, new interface{}) {
 			// TODO think what to do here
+			controller.enqueueObject(new)
 		},
 		DeleteFunc: func(obj interface{}) {
+			controller.enqueueObject(obj)
 			// TO
 			// Get the TrafficTarget name and look it up.
 			// Get the pods that are referenced by the TrafficTarget.
@@ -437,15 +468,15 @@ func (c *Controller) syncHandler(key string) error {
 // enqueueFoo takes a Foo resource and converts it into a namespace/name
 // string which is then put onto the work queue. This method should *not* be
 // passed resources of any type other than Foo.
-// func (c *Controller) enqueueFoo(obj interface{}) {
-// 	var key string
-// 	var err error
-// 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-// 		utilruntime.HandleError(err)
-// 		return
-// 	}
-// 	c.workqueue.Add(key)
-// }
+func (c *Controller) enqueueObject(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.Add(key)
+}
 
 // handleObject will take any resource implementing metav1.Object and attempt
 // to find the Foo resource that 'owns' it. It does this by looking at the
@@ -453,15 +484,15 @@ func (c *Controller) syncHandler(key string) error {
 // It then enqueues that Foo resource to be processed. If the object does not
 // have an appropriate OwnerReference, it will simply be skipped.
 // func (c *Controller) handleObject(obj interface{}) {
-// 	var object metav1.Object
+// 	var object v1.Object
 // 	var ok bool
-// 	if object, ok = obj.(metav1.Object); !ok {
+// 	if object, ok = obj.(v1.Object); !ok {
 // 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 // 		if !ok {
 // 			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
 // 			return
 // 		}
-// 		object, ok = tombstone.Obj.(metav1.Object)
+// 		object, ok = tombstone.Obj.(v1.Object)
 // 		if !ok {
 // 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
 // 			return
@@ -469,7 +500,7 @@ func (c *Controller) syncHandler(key string) error {
 // 		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 // 	}
 // 	klog.V(4).Infof("Processing object: %s", object.GetName())
-// 	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+// 	if ownerRef := v1.GetControllerOf(object); ownerRef != nil {
 // 		// If this object is not owned by a Foo, we should not do anything more
 // 		// with it.
 // 		if ownerRef.Kind != "TrafficTarget" {

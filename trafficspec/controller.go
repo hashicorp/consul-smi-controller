@@ -182,11 +182,11 @@ func NewController(
 			// If it does not exist, show error and stop processing.
 			containsTCPRoute := false
 			fmt.Printf("The target (%s) is: %#v\n---\n", binding.TargetRef.Name, target)
-			for _, rule := range target.Rules {
-				if rule.Kind == "TCPRoute" {
-					_, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(rule.Name)
+			for _, spec := range target.Specs {
+				if spec.Kind == "TCPRoute" {
+					_, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(spec.Name)
 					if err != nil {
-						fmt.Printf("No route for %s/%s", binding.Namespace, rule.Name)
+						fmt.Printf("No route for %s/%s", binding.Namespace, spec.Name)
 						controller.enqueueObject(obj)
 						return
 						// What should happen if one of the routes referenced does not exist? should we fail?

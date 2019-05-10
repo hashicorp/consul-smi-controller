@@ -3,7 +3,7 @@ module github.com/hashicorp/consul-smi
 go 1.12
 
 require (
-	github.com/deislabs/smi-sdk-go v0.0.0-20190509173626-b294f66d27c3
+	github.com/deislabs/smi-sdk-go v0.0.0-20190510070735-40fd85e2a821
 	github.com/hashicorp/consul v1.5.0
 	github.com/hashicorp/consul/api v1.1.0
 	k8s.io/api v0.0.0-20190425012535-181e1f9c52c1

@@ -1,7 +1,7 @@
 KUBECONFIG := ${HOME}/.kube/config
 
 build:
-	go build -o bin/trafficspec trafficspec/**
+	go build -o bin/trafficspec ./trafficspec
 
 run-consul:
 	scripts/helper.sh consul

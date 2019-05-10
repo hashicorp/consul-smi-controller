@@ -1,9 +1,8 @@
 package clients
 
 import (
-	"fmt"
-
 	"github.com/hashicorp/consul/api"
+	"k8s.io/klog"
 )
 
 // Consul defines an interface for a Consul client
@@ -58,9 +57,9 @@ func (c *ConsulImpl) deleteIntention(id string) error {
 // SyncIntentions will update the list of intentions in Consul to match
 // the provided source and destinations
 func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
-	// Get a list of intentions from Consul matching the destination
+	klog.Infof("Syncing Intentions %s -> %s", source, destination)
 
-	fmt.Println("Syncing Intetions", source, destination)
+	// Get a list of intentions from Consul matching the destination
 	in, _, err := c.client.Connect().IntentionMatch(
 		&api.IntentionMatch{
 			By:    api.IntentionMatchDestination,
@@ -83,7 +82,6 @@ func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
 		exists := false
 		for _, s := range source {
 			if v.SourceName == s && v.DestinationName == destination {
-				fmt.Println("d stuff", v.SourceName, v.DestinationName)
 				exists = true
 				break
 			}
@@ -93,13 +91,12 @@ func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
 			deleted = append(deleted, v.ID)
 		}
 	}
-
+	// HELLLOOOOO
 	// process creations
 	for _, s := range source {
 		exists := false
 		for _, v := range intentions {
 			if v.SourceName == s && v.DestinationName == destination {
-				fmt.Println("c stuff", v.SourceName, v.DestinationName)
 				exists = true
 				break
 			}
@@ -111,14 +108,14 @@ func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
 	}
 
 	for _, d := range deleted {
-		fmt.Printf("Deleting: %s - %s\n", d, destination)
+		klog.Infof("Deleting: %s -> %s", d, destination)
 		if err := c.deleteIntention(d); err != nil {
 			return err
 		}
 	}
 
 	for _, cr := range created {
-		fmt.Printf("Created: %s - %s\n", cr, destination)
+		klog.Infof("Creating: %s -> %s", cr, destination)
 		if err := c.createIntention(cr, destination); err != nil {
 			return err
 		}

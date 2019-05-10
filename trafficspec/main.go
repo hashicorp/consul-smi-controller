@@ -47,7 +47,7 @@ func main() {
 	flag.Parse()
 
 	klog.InitFlags(nil)
-	flag.Set("v", "4")
+	flag.Set("v", "3")
 
 	// create the consul client
 	consulClient, err := clients.NewConsul(consulHTTPAddr, consulACLToken)
@@ -85,9 +85,7 @@ func main() {
 	controller := target.NewController(
 		kubeClient,
 		accessClient,
-		specsClient,
 		accessInformerFactory.Access().V1alpha1().TrafficTargets(),
-		specsInformerFactory.Specs().V1alpha1().TCPRoutes(),
 		consulClient,
 	)
 

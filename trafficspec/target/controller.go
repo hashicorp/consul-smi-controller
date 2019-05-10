@@ -32,12 +32,9 @@ import (
 	accessv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/access/v1alpha1"
 	// specsv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/specs/v1alpha1"
 	accessClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned"
-	trafficspecscheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/scheme"
+	accessScheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/scheme"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions/access/v1alpha1"
 	accessListers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/listers/access/v1alpha1"
-	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
-	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions/specs/v1alpha1"
-	specsListers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/listers/specs/v1alpha1"
 	"github.com/hashicorp/consul-smi/clients"
 )
 
@@ -62,11 +59,8 @@ const (
 type Controller struct {
 	kubeclientset   kubernetes.Interface
 	accessClientset accessClientset.Interface
-	specsClientset  specsClientset.Interface
 	targetLister    accessListers.TrafficTargetLister
 	targetSynced    cache.InformerSynced
-	tcpRouteLister  specsListers.TCPRouteLister
-	tcpRouteSynced  cache.InformerSynced
 	workqueue       workqueue.RateLimitingInterface
 	recorder        record.EventRecorder
 	consulClient    clients.Consul
@@ -76,16 +70,13 @@ type Controller struct {
 func NewController(
 	kubeclientset kubernetes.Interface,
 	accessClientset accessClientset.Interface,
-	specsClientset specsClientset.Interface,
 	targetInformer accessInformers.TrafficTargetInformer,
-	tcpRouteInformer specsInformers.TCPRouteInformer,
 	consulClient clients.Consul,
 ) *Controller {
 	// Create event broadcaster
-	// Add smi-controller types to the default Kubernetes Scheme so Events can be
-	// logged for smi-controller types.
-	utilruntime.Must(trafficspecscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
+	// Add controller types to the default Kubernetes Scheme so Events can be
+	// logged for controller types.
+	utilruntime.Must(accessScheme.AddToScheme(scheme.Scheme))
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
@@ -94,7 +85,6 @@ func NewController(
 	controller := &Controller{
 		kubeclientset:   kubeclientset,
 		accessClientset: accessClientset,
-		specsClientset:  specsClientset,
 		targetLister:    targetInformer.Lister(),
 		targetSynced:    targetInformer.Informer().HasSynced,
 		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerAgentName),
@@ -105,7 +95,6 @@ func NewController(
 	klog.Info("Setting up event handlers")
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			fmt.Println("Add func")
 			target := obj.(*accessv1alpha1.TrafficTarget)
 
 			if target.Status != accessv1alpha1.StatusCreated {
@@ -113,44 +102,29 @@ func NewController(
 			}
 		},
 		UpdateFunc: func(old, new interface{}) {
-			fmt.Println("Update func")
-
 			newTarget := new.(*accessv1alpha1.TrafficTarget)
 			oldTarget := old.(*accessv1alpha1.TrafficTarget)
 			if newTarget.ResourceVersion == oldTarget.ResourceVersion {
 				return
 			}
 
+			/// I bet here setting the status is double queuing
 			if oldTarget.Status == accessv1alpha1.StatusPending && newTarget.Status == accessv1alpha1.StatusCreated {
+				fmt.Println("Ignore")
 				return
 			}
 
-			controller.setStatus(newTarget, accessv1alpha1.StatusPending)
+			newTarget.Status = accessv1alpha1.StatusPending
 			controller.workqueue.Add(newTarget)
 		},
 		DeleteFunc: func(obj interface{}) {
-			fmt.Println("Del func")
-
 			target := obj.(*accessv1alpha1.TrafficTarget)
 			target.SetDeletionTimestamp(&apiv1.Time{Time: time.Now()})
 			controller.workqueue.Add(target)
-			// TO
-			// Get the TrafficTarget name and look it up.
-			// Get the pods that are referenced by the TrafficTarget.
-			// Look for a service account for that pod.
-			// Look up the service name through Consul Auth Method API.
-
-			// FROM
-			// Get the Subjects from the IdentifyBinding.
-			// Get the ServiceAccount from the Subjects and look up in Consul (Auth Method API) to get the service name.
-
-			// Intention
-			// Delete an intention that allows traffic from "FROM" to "TO"
 		},
 	})
 
 	// TODO: Create informer that listens for TCPRoute objects
-	// Informer will just log create/update/delete
 	return controller
 }
 
@@ -171,13 +145,12 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
-	klog.Info("Starting workers")
+	klog.Infof("Starting %d workers", threadiness)
 	// Launch two workers to process resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
 
-	klog.Info("Started workers")
 	<-stopCh
 	klog.Info("Shutting down workers")
 
@@ -200,31 +173,9 @@ func (c *Controller) processNextWorkItem() bool {
 		return false
 	}
 
-	// We call Done here so the workqueue knows we have finished
-	// processing this item. We also must remember to call Forget if we
-	// do not want this work item being re-queued. For example, we do
-	// not call Forget if a transient error occurs, instead the item is
-	// put back on the workqueue and attempted again after a back-off
-	// period.
 	defer c.workqueue.Done(obj)
 
-	// var key string
-	// var ok bool
-	// // We expect strings to come off the workqueue. These are of the
-	// // form namespace/name. We do this as the delayed nature of the
-	// // workqueue means the items in the informer cache may actually be
-	// // more up to date that when the item was initially put onto the
-	// // workqueue.
-	// if key, ok = obj.(string); !ok {
-	// 	// As the item in the workqueue is actually invalid, we call
-	// 	// Forget here else we'd go into a loop of attempting to
-	// 	// process a work item that is invalid.
-	// 	c.workqueue.Forget(obj)
-	// 	utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
-	// }
-
-	// Run the syncHandler, passing it the namespace/name string of the
-	// Resource to be synced.
+	// Run the syncHandler, passing it the Resource to be synced.
 	if err := c.syncHandler(obj); err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		c.workqueue.AddRateLimited(obj)
@@ -234,7 +185,6 @@ func (c *Controller) processNextWorkItem() bool {
 	// Finally, if no error occurs we Forget this item so it does not
 	// get queued again until another change happens.
 	c.workqueue.Forget(obj)
-	klog.Infof("Successfully synced '%s'", obj)
 
 	return true
 }
@@ -256,37 +206,32 @@ func (c *Controller) syncHandler(obj interface{}) error {
 		return nil
 	}
 
-	klog.Infof("allstargets: %#v", allTargets)
-
 	toService := currentTarget.Destination.Name
-
-	klog.Infof("toservice: %s", toService)
-
 	fromServices := []string{}
-	// Loop over the targets.
+
+	// Loop over the targets and if it's the same destination, add the sources.
 	for _, t := range allTargets {
 		// TODO: When HTTP/GRPC routes are added, also check the spec of the TrafficTargets.
-		// If the targets are the same
 		if t.Destination.Name == currentTarget.Destination.Name {
-			// Add the sources of the target to the from list.
 			for _, s := range t.Sources {
 				fromServices = append(fromServices, s.Name)
 			}
 		}
 	}
 
-	// klog.Infof("Creating intention from %s to %s", fromServices, toService)
+	// Sync the current state with the desired state.
 	err = c.consulClient.SyncIntentions(fromServices, toService)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to create intention: %s", err.Error()))
 		return nil
 	}
 
-	klog.Infof("I'm dead: %#v", currentTarget.GetDeletionTimestamp())
+	// If the target is deleted, don't update the status.
 	if currentTarget.GetDeletionTimestamp() != nil {
 		return nil
 	}
 
+	// Work is done, so set status to created.
 	err = c.setStatus(currentTarget, accessv1alpha1.StatusCreated)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to set status: %s", err.Error()))

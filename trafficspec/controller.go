@@ -106,7 +106,7 @@ func NewController(
 		targetSynced:    targetInformer.Informer().HasSynced,
 		tcpRouteLister:  tcpRouteInformer.Lister(),
 		tcpRouteSynced:  tcpRouteInformer.Informer().HasSynced,
-		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "Foos"),
+		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "traffic-controller"),
 		recorder:        recorder,
 		consulClient:    consulClient,
 	}
@@ -115,16 +115,25 @@ func NewController(
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			klog.Info("TrafficTarget created")
-			controller.enqueueObject(obj)
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err != nil {
+				controller.workqueue.Add(key)
+			}
 		},
 		UpdateFunc: func(old, new interface{}) {
 			klog.Info("TrafficTarget updated")
-			controller.enqueueObject(new)
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err != nil {
+				controller.workqueue.Add(key)
+			}
 		},
 		DeleteFunc: func(obj interface{}) {
 			// TODO think what to do (probably clean up bindings that were referenced)
 			klog.Info("TrafficTarget deleted")
-			controller.enqueueObject(obj)
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				controller.workqueue.Add(key)
+			}
 		},
 	})
 
@@ -136,8 +145,7 @@ func NewController(
 			// TO
 			target, err := controller.targetLister.TrafficTargets(binding.Namespace).Get(binding.TargetRef.Name)
 			if err != nil {
-				klog.Errorf("No TrafficTarget found for IdentifyBinding %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err.Error())
-				controller.enqueueObject(obj)
+				utilruntime.HandleError(fmt.Errorf("No TrafficTarget found for IdentifyBinding %s/%s: %s", binding.Namespace, binding.TargetRef.Name, err))
 				return
 			}
 
@@ -157,7 +165,7 @@ func NewController(
 			// TODO: make this a bit more robust ...
 			// TODO: should we throw an error if multiple pods match the label? ... or should we create intention rules for each of them?
 			if targetPods.Size() == 0 {
-				klog.Errorf("No Pods match the labels defined in the TrafficTarget: %s", targetLabels)
+				utilruntime.HandleError(fmt.Errorf("No Pods match the labels defined in the TrafficTarget: %s", targetLabels))
 			}
 
 			toService := targetPods.Items[0].Spec.ServiceAccountName
@@ -170,8 +178,7 @@ func NewController(
 				// Use namespace and name to look up pod
 				subjectPod, err := kubeclientset.CoreV1().Pods(subject.Namespace).Get(subject.Name, v1.GetOptions{})
 				if err != nil {
-					klog.Errorf("No Pod found for IdentityBinding subject %s/%s: %s", subject.Namespace, subject.Name, err.Error())
-					controller.enqueueObject(obj)
+					utilruntime.HandleError(fmt.Errorf("No Pod found for IdentityBinding subject %s/%s: %s", subject.Namespace, subject.Name, err))
 					return
 				}
 
@@ -186,11 +193,10 @@ func NewController(
 				if spec.Kind == "TCPRoute" {
 					_, err := controller.tcpRouteLister.TCPRoutes(binding.Namespace).Get(spec.Name)
 					if err != nil {
-						fmt.Printf("No route for %s/%s", binding.Namespace, spec.Name)
-						controller.enqueueObject(obj)
-						return
 						// What should happen if one of the routes referenced does not exist? should we fail?
 						// What if someone deletes a TCPRoute? <- it should probably not be possible to delete a route that is referenced by a TrafficTarget.
+						utilruntime.HandleError(fmt.Errorf("No route for %s/%s", binding.Namespace, spec.Name))
+						return
 					}
 
 					containsTCPRoute = true
@@ -199,7 +205,6 @@ func NewController(
 			}
 
 			if !containsTCPRoute {
-				controller.enqueueObject(obj)
 				return
 			}
 
@@ -207,8 +212,7 @@ func NewController(
 			for _, fromService := range fromServices {
 				ok, err := controller.consulClient.CreateIntention(fromService, toService)
 				if err != nil {
-					klog.Errorf("Unable to create intention: %s", err.Error())
-					controller.enqueueObject(obj)
+					utilruntime.HandleError(fmt.Errorf("Unable to create intention: %s", err))
 					return
 				}
 
@@ -218,29 +222,11 @@ func NewController(
 					klog.Info("Intention not created")
 				}
 			}
-
-			// Intention
-			// Create an intention that allows traffic from "FROM" to "TO"
-			// client, err := api.NewClient(api.DefaultConfig())
-			// if err != nil {
-			// 	panic(err)
-			// }
-
-			// connect := client.Connect()
-
-			// i := &api.Intention{
-			// 	SourceName:      "web",
-			// 	DestinationName: target.Name,
-			// 	Action:          api.IntentionActionAllow,
-			// }
-
 		},
 		UpdateFunc: func(old, new interface{}) {
 			// TODO think what to do here
-			controller.enqueueObject(new)
 		},
 		DeleteFunc: func(obj interface{}) {
-			controller.enqueueObject(obj)
 			// TO
 			// Get the TrafficTarget name and look it up.
 			// Get the pods that are referenced by the TrafficTarget.
@@ -258,28 +244,6 @@ func NewController(
 
 	// TODO: Create informer that listens for TCPRoute objects
 	// Informer will just log create/update/delete
-
-	// Set up an event handler for when Deployment resources change. This
-	// handler will lookup the owner of the given Deployment, and if it is
-	// owned by a Foo resource will enqueue that Foo resource for
-	// processing. This way, we don't need to implement custom logic for
-	// handling Deployment resources. More info on this pattern:
-	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
-	// deploymentInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-	// 	AddFunc: controller.handleObject,
-	// 	UpdateFunc: func(old, new interface{}) {
-	// 		newDepl := new.(*appsv1.Deployment)
-	// 		oldDepl := old.(*appsv1.Deployment)
-	// 		if newDepl.ResourceVersion == oldDepl.ResourceVersion {
-	// 			// Periodic resync will send update events for all known Deployments.
-	// 			// Two different versions of the same Deployment will always have different RVs.
-	// 			return
-	// 		}
-	// 		controller.handleObject(new)
-	// 	},
-	// 	DeleteFunc: controller.handleObject,
-	// })
-
 	return controller
 }
 
@@ -292,7 +256,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer c.workqueue.ShutDown()
 
 	// Start the informer factories to begin populating the informer caches
-	klog.Info("Starting Foo controller")
+	klog.Info("Starting controller")
 
 	// Wait for the caches to be synced before starting workers
 	klog.Info("Waiting for informer caches to sync")
@@ -301,7 +265,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	klog.Info("Starting workers")
-	// Launch two workers to process Foo resources
+	// Launch two workers to process resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -355,7 +319,7 @@ func (c *Controller) processNextWorkItem() bool {
 			return nil
 		}
 		// Run the syncHandler, passing it the namespace/name string of the
-		// Foo resource to be synced.
+		// Resource to be synced.
 		if err := c.syncHandler(key); err != nil {
 			// Put the item back on the workqueue to handle any transient errors.
 			c.workqueue.AddRateLimited(key)
@@ -377,7 +341,7 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 // syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the Foo resource
+// converge the two. It then updates the Status block of the resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(key string) error {
 	// Convert the namespace/name string into a distinct namespace and name
@@ -390,10 +354,10 @@ func (c *Controller) syncHandler(key string) error {
 	// Get the Foo resource with this namespace/name
 	target, err := c.targetLister.TrafficTargets(namespace).Get(name)
 	if err != nil {
-		// The Foo resource may no longer exist, in which case we stop
+		// The resource may no longer exist, in which case we stop
 		// processing.
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("foo '%s' in work queue no longer exists", key))
+			utilruntime.HandleError(fmt.Errorf("%s in work queue no longer exists", key))
 			return nil
 		}
 
@@ -402,164 +366,6 @@ func (c *Controller) syncHandler(key string) error {
 
 	fmt.Printf("synching %#v", target)
 
-	// deploymentName := target.Spec.DeploymentName
-	// if deploymentName == "" {
-	// 	// We choose to absorb the error here as the worker would requeue the
-	// 	// resource otherwise. Instead, the next time the resource is updated
-	// 	// the resource will be queued again.
-	// 	utilruntime.HandleError(fmt.Errorf("%s: deployment name must be specified", key))
-	// 	return nil
-	// }
-
-	// Get the deployment with the name specified in Foo.spec
-	// deployment, err := c.deploymentsLister.Deployments(foo.Namespace).Get(deploymentName)
-	// // If the resource doesn't exist, we'll create it
-	// if errors.IsNotFound(err) {
-	// 	deployment, err = c.kubeclientset.AppsV1().Deployments(foo.Namespace).Create(newDeployment(foo))
-	// }
-
-	// If an error occurs during Get/Create, we'll requeue the item so we can
-	// attempt processing again later. This could have been caused by a
-	// temporary network failure, or any other transient reason.
-	// if err != nil {
-	// 	return err
-	// }
-
-	// If the Deployment is not controlled by this Foo resource, we should log
-	// a warning to the event recorder and ret
-	// if !metav1.IsControlledBy(deployment, foo) {
-	// 	msg := fmt.Sprintf(MessageResourceExists, deployment.Name)
-	// 	c.recorder.Event(foo, corev1.EventTypeWarning, ErrResourceExists, msg)
-	// 	return fmt.Errorf(msg)
-	// }
-
-	// If this number of the replicas on the Foo resource is specified, and the
-	// number does not equal the current desired replicas on the Deployment, we
-	// should update the Deployment resource.
-	// if foo.Spec.Replicas != nil && *foo.Spec.Replicas != *deployment.Spec.Replicas {
-	// 	klog.V(4).Infof("Foo %s replicas: %d, deployment replicas: %d", name, *foo.Spec.Replicas, *deployment.Spec.Replicas)
-	// 	deployment, err = c.kubeclientset.AppsV1().Deployments(foo.Namespace).Update(newDeployment(foo))
-	// }
-
-	// If an error occurs during Update, we'll requeue the item so we can
-	// attempt processing again later. THis could have been caused by a
-	// temporary network failure, or any other transient reason.
-	// if err != nil {
-	// 	return err
-	// }
-
-	// Finally, we update the status block of the Foo resource to reflect the
-	// current state of the world
-	// err = c.updateFooStatus(foo, deployment)
-	// if err != nil {
-	// 	return err
-	// }
-
 	c.recorder.Event(target, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	return nil
 }
-
-// func (c *Controller) updateFooStatus(target *specv1alpha1.TrafficTarget, deployment *appsv1.Deployment) error {
-// 	// NEVER modify objects from the store. It's a read-only, local cache.
-// 	// You can use DeepCopy() to make a deep copy of original object and modify this copy
-// 	// Or create a copy manually for better performance
-// 	targetCopy := target.DeepCopy()
-// 	// targetCopy.Status.AvailableReplicas = deployment.Status.AvailableReplicas
-// 	// If the CustomResourceSubresources feature gate is not enabled,
-// 	// we must use Update instead of UpdateStatus to update the Status block of the Foo resource.
-// 	// UpdateStatus will not allow changes to the Spec of the resource,
-// 	// which is ideal for ensuring nothing other than resource status has been updated.
-// 	_, err := c.smiclientset.SmispecV1alpha1().TrafficTargets(target.Namespace).Update(targetCopy)
-// 	return err
-// }
-
-// enqueueFoo takes a Foo resource and converts it into a namespace/name
-// string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than Foo.
-func (c *Controller) enqueueObject(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.Add(key)
-}
-
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the Foo resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that Foo resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-// func (c *Controller) handleObject(obj interface{}) {
-// 	var object v1.Object
-// 	var ok bool
-// 	if object, ok = obj.(v1.Object); !ok {
-// 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-// 		if !ok {
-// 			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-// 			return
-// 		}
-// 		object, ok = tombstone.Obj.(v1.Object)
-// 		if !ok {
-// 			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-// 			return
-// 		}
-// 		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-// 	}
-// 	klog.V(4).Infof("Processing object: %s", object.GetName())
-// 	if ownerRef := v1.GetControllerOf(object); ownerRef != nil {
-// 		// If this object is not owned by a Foo, we should not do anything more
-// 		// with it.
-// 		if ownerRef.Kind != "TrafficTarget" {
-// 			return
-// 		}
-
-// 		foo, err := c.targetLister.TrafficTargets(object.GetNamespace()).Get(ownerRef.Name)
-// 		if err != nil {
-// 			klog.V(4).Infof("ignoring orphaned object '%s' of foo '%s'", object.GetSelfLink(), ownerRef.Name)
-// 			return
-// 		}
-
-// 		// c.enqueueFoo(foo)
-// 		return
-// 	}
-// }
-
-// newDeployment creates a new Deployment for a Foo resource. It also sets
-// the appropriate OwnerReferences on the resource so handleObject can discover
-// the Foo resource that 'owns' it.
-// func newDeployment(foo *samplev1alpha1.Foo) *appsv1.Deployment {
-// 	labels := map[string]string{
-// 		"app":        "nginx",
-// 		"controller": foo.Name,
-// 	}
-// 	return &appsv1.Deployment{
-// 		ObjectMeta: metav1.ObjectMeta{
-// 			Name:      foo.Spec.DeploymentName,
-// 			Namespace: foo.Namespace,
-// 			OwnerReferences: []metav1.OwnerReference{
-// 				*metav1.NewControllerRef(foo, samplev1alpha1.SchemeGroupVersion.WithKind("Foo")),
-// 			},
-// 		},
-// 		Spec: appsv1.DeploymentSpec{
-// 			Replicas: foo.Spec.Replicas,
-// 			Selector: &metav1.LabelSelector{
-// 				MatchLabels: labels,
-// 			},
-// 			Template: corev1.PodTemplateSpec{
-// 				ObjectMeta: metav1.ObjectMeta{
-// 					Labels: labels,
-// 				},
-// 				Spec: corev1.PodSpec{
-// 					Containers: []corev1.Container{
-// 						{
-// 							Name:  "nginx",
-// 							Image: "nginx:latest",
-// 						},
-// 					},
-// 				},
-// 			},
-// 		},
-// 	}
-// }

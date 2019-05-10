@@ -13,6 +13,7 @@ limitations under the License.
 package main
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 	"time"
@@ -85,6 +86,9 @@ func NewController(
 	tcpRouteInformer specsInformers.TCPRouteInformer,
 	consulClient clients.Consul,
 ) *Controller {
+
+	klog.InitFlags(nil)
+	flag.Set("v", "4")
 
 	// Create event broadcaster
 	// Add smi-controller types to the default Kubernetes Scheme so Events can be

@@ -1,17 +1,15 @@
 package clients
 
-import "github.com/hashicorp/consul/api"
+import (
+	"github.com/hashicorp/consul/api"
+	"k8s.io/klog"
+)
 
 // Consul defines an interface for a Consul client
 type Consul interface {
-	// IntentionsExists returns true of false if the intention exists or not
-	IntentionExists(source string, destination string) (bool, error)
-
-	// DeleteIntention deletes an intention in Consul
-	DeleteIntention() error
-
-	// CreateIntention creates an intention in Consul
-	CreateIntention(source string, destination string) (bool, error)
+	// SyncIntetions will update the list of intentions in Consul to match
+	// the provided source and destinations
+	SyncIntentions(source []string, destination string) error
 }
 
 // ConsulImpl concrete implementation of the Consul client interface
@@ -33,34 +31,8 @@ func NewConsul(httpAddr, aclToken string) (Consul, error) {
 	return &ConsulImpl{cli}, nil
 }
 
-// IntentionExists returns true of false if the intention exists or not
-func (c *ConsulImpl) IntentionExists(source string, destination string) (bool, error) {
-	args := api.IntentionCheck{
-		Source:      source,
-		Destination: destination,
-	}
-
-	ok, _, err := c.client.Connect().IntentionCheck(&args, nil)
-	if err != nil {
-		return false, err
-	}
-
-	return ok, nil
-}
-
-// CreateIntention creates an intention in Consul
-func (c *ConsulImpl) CreateIntention(source string, destination string) (bool, error) {
-	// first check to see if we need to create
-	ok, err := c.IntentionExists(source, destination)
-	if err != nil {
-		return false, err
-	}
-
-	// if we have an intention just return
-	if ok {
-		return false, nil
-	}
-
+// createIntention creates an intention in Consul
+func (c *ConsulImpl) createIntention(source string, destination string) error {
 	in := api.Intention{
 		SourceName:      source,
 		DestinationName: destination,
@@ -68,15 +40,86 @@ func (c *ConsulImpl) CreateIntention(source string, destination string) (bool, e
 		Description:     "Automatically added by Kubernetes",
 	}
 
-	_, _, err = c.client.Connect().IntentionCreate(&in, nil)
+	_, _, err := c.client.Connect().IntentionCreate(&in, nil)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
-// DeleteIntention deletes an intention in Consul
-func (c *ConsulImpl) DeleteIntention() error {
+// deleteIntention deletes an intention in Consul
+func (c *ConsulImpl) deleteIntention(id string) error {
+	_, err := c.client.Connect().IntentionDelete(id, nil)
+	return err
+}
+
+// SyncIntentions will update the list of intentions in Consul to match
+// the provided source and destinations
+func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
+	klog.Infof("Syncing Intentions %s -> %s", source, destination)
+
+	// Get a list of intentions from Consul matching the destination
+	in, _, err := c.client.Connect().IntentionMatch(
+		&api.IntentionMatch{
+			By:    api.IntentionMatchDestination,
+			Names: []string{destination},
+		},
+		&api.QueryOptions{},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	deleted := make([]string, 0)
+	created := make([]string, 0)
+
+	intentions := in[destination]
+
+	// process deletions
+	for _, v := range intentions {
+		exists := false
+		for _, s := range source {
+			if v.SourceName == s && v.DestinationName == destination {
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			deleted = append(deleted, v.ID)
+		}
+	}
+	// HELLLOOOOO
+	// process creations
+	for _, s := range source {
+		exists := false
+		for _, v := range intentions {
+			if v.SourceName == s && v.DestinationName == destination {
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			created = append(created, s)
+		}
+	}
+
+	for _, d := range deleted {
+		klog.Infof("Deleting: %s -> %s", d, destination)
+		if err := c.deleteIntention(d); err != nil {
+			return err
+		}
+	}
+
+	for _, cr := range created {
+		klog.Infof("Creating: %s -> %s", cr, destination)
+		if err := c.createIntention(cr, destination); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

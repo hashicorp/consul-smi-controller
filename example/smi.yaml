@@ -1,38 +1,27 @@
 # TCPRoute for Service A 
----
-apiVersion: spec.smi-spec.io/v1alpha1
-kind: TCPRoute
-metadata:
-  name: service-a-tcp-route
+# ---
+# apiVersion: specs.smi-spec.io/v1alpha1
+# kind: TCPRoute
+# metadata:
+#   name: service-a-tcp-route
 
-# TrafficTarget defines allowed routes for a service
+# TrafficTarget defines allowed routes for service-a
+# In this example service-b is allow to connect using
+# TCP
 ---
 kind: TrafficTarget
 apiVersion: access.smi-spec.io/v1alpha1
 metadata:
   name: foo
   namespace: default
-selector:
-  matchLabels:
-    app: service-a
-port: 8080
-rules:
-- kind: TCPRoute
-  name: service-a-tcp-route
-
-# IdentityBinding defines services which are allowed to connect on the
-# TrafficTarget routes
-# TrafficTarget will always be in the same namespace as the IdentityBinding
----
-kind: IdentityBinding
-apiVersion: access.smi-spec.io/v1alpha1
-metadata:
-  name: account-specific
+destination:
+  kind: ServiceAccount
+  name: service-a
   namespace: default
-subjects:
+sources:
 - kind: ServiceAccount
   name: service-b
   namespace: default
-targetRef:
-  kind: TrafficTarget
-  name: foo 
+specs:
+- kind: TCPRoute
+  name: service-a-tcp-route

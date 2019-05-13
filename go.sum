@@ -68,6 +68,12 @@ github.com/deislabs/smi-sdk-go v0.0.0-20190509044542-31dde7317b2b h1:7JMACJ5J0ED
 github.com/deislabs/smi-sdk-go v0.0.0-20190509044542-31dde7317b2b/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
 github.com/deislabs/smi-sdk-go v0.0.0-20190509173626-b294f66d27c3 h1:2CsXtorLiYrq+OCtMeTWWGcgKUEGYpv3X/Eus5Fp2hg=
 github.com/deislabs/smi-sdk-go v0.0.0-20190509173626-b294f66d27c3/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
+github.com/deislabs/smi-sdk-go v0.0.0-20190510063847-1d41520c8265 h1:Mo7EXA50/lgx6MRwjYkFnThaaxxBdz4iDyHYGyXi+Z8=
+github.com/deislabs/smi-sdk-go v0.0.0-20190510063847-1d41520c8265/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
+github.com/deislabs/smi-sdk-go v0.0.0-20190510070735-40fd85e2a821 h1:UkNZj70jSX/D1A7pXhUKbguvTNCNUaKfuCtrE+PDtss=
+github.com/deislabs/smi-sdk-go v0.0.0-20190510070735-40fd85e2a821/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
+github.com/deislabs/smi-sdk-go v0.0.0-20190510160452-b5da66e05e7c h1:tfzVJOQ8EiRk2dtFFYMp59tUb9LwnBy59T6HZkY36xo=
+github.com/deislabs/smi-sdk-go v0.0.0-20190510160452-b5da66e05e7c/go.mod h1:oVRyUDfJ96ttS0y3BM6r6OPaFbWt2Pe1H4kE9fAHB1U=
 github.com/denisenkom/go-mssqldb v0.0.0-20180620032804-94c9c97e8c9f/go.mod h1:xN/JuLBIz4bjkxNmByTiV1IbhfnYb6oo99phBn4Eqhc=
 github.com/denverdino/aliyungo v0.0.0-20170926055100-d3308649c661/go.mod h1:dV8lFg6daOBZbT6/BDGIz6Y3WFGn8juu6G+CQ6LHtl0=
 github.com/dgrijalva/jwt-go v0.0.0-20160705203006-01aeca54ebda/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
@@ -150,6 +156,7 @@ github.com/hashicorp/consul/api v1.1.0 h1:BNQPM9ytxj6jbjjdRPioQ94T6YXriSopn0i8CO
 github.com/hashicorp/consul/api v1.1.0/go.mod h1:VmuI/Lkw1nC05EYQWNKwWGbkg+FbDBtguAZLlVdkD9Q=
 github.com/hashicorp/consul/sdk v0.1.0 h1:tTfutTNVUTDXpNM4YCImLfiiY3yCDpfgS6tNlUioIUE=
 github.com/hashicorp/consul/sdk v0.1.0/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
+github.com/hashicorp/consul/sdk v0.1.1 h1:LnuDWGNsoajlhGyHJvuWW6FVqRl8JOTPqS6CPTsYjhY=
 github.com/hashicorp/consul/sdk v0.1.1/go.mod h1:VKf9jXwCTEY1QZP2MOLRhb5i/I/ssyNV1vwHyQBF0x8=
 github.com/hashicorp/errwrap v1.0.0 h1:hLrqtEDnRye3+sgx6z4qVLNuviH3MR5aQ0ykNJa/UYA=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
@@ -164,6 +171,7 @@ github.com/hashicorp/go-immutable-radix v1.0.0/go.mod h1:0y9vanUI8NX6FsYoO3zeMjh
 github.com/hashicorp/go-memdb v0.0.0-20180223233045-1289e7fffe71/go.mod h1:kbfItVoBJwCfKXDXN4YoAXjxcFVZ7MRrJzyTX6H4giE=
 github.com/hashicorp/go-msgpack v0.5.3 h1:zKjpN5BK/P5lMYrLmBHdBULWbJ0XpYR+7NGzqkZzoD4=
 github.com/hashicorp/go-msgpack v0.5.3/go.mod h1:ahLV/dePpqEmjfWmKiqvPkv/twdG7iPBM1vqhUKIvfM=
+github.com/hashicorp/go-msgpack v0.5.4 h1:SFT72YqIkOcLdWJUYcriVX7hbrZpwc/f7h8aW2NUqrA=
 github.com/hashicorp/go-msgpack v0.5.4/go.mod h1:ahLV/dePpqEmjfWmKiqvPkv/twdG7iPBM1vqhUKIvfM=
 github.com/hashicorp/go-multierror v1.0.0 h1:iVjPR7a6H0tWELX5NxNe7bYopibicUzc7uPribsnS6o=
 github.com/hashicorp/go-multierror v1.0.0/go.mod h1:dHtQlpGsu+cZNNAkkCN/P3hoUDHhCYQXV3UM06sGGrk=

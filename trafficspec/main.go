@@ -25,13 +25,14 @@ import (
 	"k8s.io/sample-controller/pkg/signals"
 
 	// Uncomment the following line to load the gcp plugin (only required to authenticate against GKE clusters).
-	// _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 
 	accessClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
 	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
 	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions"
 	"github.com/hashicorp/consul-smi/clients"
+	"github.com/hashicorp/consul-smi/trafficspec/target"
 	// "k8s.io/sample-controller/pkg/signals"
 )
 
@@ -44,6 +45,9 @@ var (
 
 func main() {
 	flag.Parse()
+
+	klog.InitFlags(nil)
+	flag.Set("v", "3")
 
 	// create the consul client
 	consulClient, err := clients.NewConsul(consulHTTPAddr, consulACLToken)
@@ -78,13 +82,10 @@ func main() {
 	accessInformerFactory := accessInformers.NewSharedInformerFactory(accessClient, time.Second*30)
 	specsInformerFactory := specsInformers.NewSharedInformerFactory(specsClient, time.Second*30)
 
-	controller := NewController(
+	controller := target.NewController(
 		kubeClient,
 		accessClient,
-		specsClient,
 		accessInformerFactory.Access().V1alpha1().TrafficTargets(),
-		accessInformerFactory.Access().V1alpha1().IdentityBindings(),
-		specsInformerFactory.Specs().V1alpha1().TCPRoutes(),
 		consulClient,
 	)
 

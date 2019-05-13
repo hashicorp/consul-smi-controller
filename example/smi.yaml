@@ -1,9 +1,9 @@
 # TCPRoute for Service A 
-# ---
-# apiVersion: specs.smi-spec.io/v1alpha1
-# kind: TCPRoute
-# metadata:
-#   name: service-a-tcp-route
+---
+apiVersion: specs.smi-spec.io/v1alpha1
+kind: TCPRoute
+metadata:
+  name: service-a-tcp-route
 
 # TrafficTarget defines allowed routes for service-a
 # In this example service-b is allow to connect using
@@ -12,7 +12,7 @@
 kind: TrafficTarget
 apiVersion: access.smi-spec.io/v1alpha1
 metadata:
-  name: foo
+  name: service-a-targets
   namespace: default
 destination:
   kind: ServiceAccount

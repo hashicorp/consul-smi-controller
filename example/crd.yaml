@@ -34,7 +34,7 @@ spec:
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:  
-  name: tcproutes.spec.smi-spec.io
+  name: tcproutes.specs.smi-spec.io
 spec:  
   group: specs.smi-spec.io
   version: v1alpha1
@@ -45,3 +45,63 @@ spec:
       - tr
     plural: tcproutes
     singular: tcproute
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: smi-controller
+  labels:
+    # Add these permissions to the "view" default role.
+    rbac.authorization.k8s.io/aggregate-to-view: "true" 
+    rbac.authorization.k8s.io/aggregate-to-cluster-reader: "true" 
+rules:
+- apiGroups: ["specs.smi-spec.io", "access.smi-spec.io",""] 
+  resources: ["tcproutes","htttproutegroups","traffictargets","events"] 
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: smi-controller
+  namespace: default
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: smi-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: smi-controller
+subjects:
+- kind: ServiceAccount
+  name: smi-controller
+  namespace: default
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: smi-trafficspec-controller
+spec:
+  serviceAccountName: smi-controller
+  automountServiceAccountToken: true
+  containers:
+  - name: trafficspec-controller
+    image: nicholasjackson/testing123:v0.1.0
+    imagePullPolicy: IfNotPresent
+    command: ['/app/trafficspec']
+    args: ["--consul-http-addr=http://$(HOST_IP):8500", "--consul-http-token=$(CONSUL_HTTP_TOKEN)"]
+    env:
+    - name: CONSUL_HTTP_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: consul-consul-bootstrap-acl-token
+          key: token
+    - name: HOST_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.hostIP

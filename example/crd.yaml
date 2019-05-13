@@ -81,6 +81,16 @@ subjects:
   name: smi-controller
   namespace: default
 
+# secret for registry
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nicholasjackson-smi-demo-pull-secret
+data:
+  .dockerconfigjson: ewogICJhdXRocyI6IHsKICAgICJxdWF5LmlvIjogewogICAgICAiYXV0aCI6ICJibWxqYUc5c1lYTnFZV05yYzI5dUszTnRhVjlrWlcxdk9sSTFXRmxCVVRrNVZFUXpNMHRWTVVWSFdGY3lUakJTU0V0VlFVbEtXVEZYVnpWWVRsTlRVMUExTVV0R1FsTkNUMG96V0ZoRFdVMUxVVk5XVDFsWE1UYz0iLAogICAgICAiZW1haWwiOiAiIgogICAgfQogIH0KfQ==
+type: kubernetes.io/dockerconfigjson
+
 ---
 apiVersion: v1
 kind: Pod
@@ -91,7 +101,7 @@ spec:
   automountServiceAccountToken: true
   containers:
   - name: trafficspec-controller
-    image: nicholasjackson/testing123:v0.1.0
+    image: quay.io/nicholasjackson/smi-traffic-controller:v0.0.0-alpha.1
     imagePullPolicy: IfNotPresent
     command: ['/app/trafficspec']
     args: ["--consul-http-addr=http://$(HOST_IP):8500", "--consul-http-token=$(CONSUL_HTTP_TOKEN)"]
@@ -105,3 +115,5 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: status.hostIP
+  imagePullSecrets:
+    - name: nicholasjackson-smi-demo-pull-secret   

@@ -1,6 +1,6 @@
 KUBECONFIG := ${HOME}/.kube/config
-VERSION := v0.1.0
-DOCKER_TAG := nicholasjackson/testing123
+VERSION := v0.0.0-alpha.1
+DOCKER_TAG := quay.io/nicholasjackson/smi-traffic-controller
 
 
 build:

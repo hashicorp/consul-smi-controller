@@ -37,6 +37,9 @@ case "$1" in
     echo ""
     open_service 18500 8500 consul-consul-server http default
     ;;
+  consul-ui)
+    xdg-open http://$(kubectl get svc consul-consul-ui -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+    ;;
   *)
     echo "Usage:"
     echo "consul     - Start a proxy to the Consul server API"

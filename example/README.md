@@ -19,3 +19,12 @@ $ kubectl apply -f ./crd.yaml
 ```bash
 $ kubectl apply -f ./example.yaml
 ```
+
+4. Open the Consul UI
+
+```bash
+# Linux
+$ xdg-open http://$(kubectl get svc consul-consul-ui -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+# or Mac
+$ open http://$(kubectl get svc consul-consul-ui -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+```

@@ -16,11 +16,11 @@ metadata:
   namespace: default
 destination:
   kind: ServiceAccount
-  name: service-a
+  name: counting
   namespace: default
 sources:
 - kind: ServiceAccount
-  name: service-b
+  name: dashboard
   namespace: default
 specs:
 - kind: TCPRoute

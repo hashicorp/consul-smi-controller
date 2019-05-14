@@ -24,8 +24,8 @@ is designed to work in a wider context than Kubernetes. To simplify integration 
 working with Kuberentes, K8s service tokens can be associated with Consul ACL tokens.
 
 When a service starts it uses the service token from the assigned K8s service account to
-obtain a Consul ACL token.  K8s service tokens are cryptographically verifiable and before 
-Consul issues the ACL token which can be used to obtain a service mesh identity it
+obtain a Consul ACL token.  K8s service tokens are cryptographically verifiable, before 
+Consul issues the ACL token which can be used to obtain a service mesh identity, it
 validates the K8s service token with the K8s API. The name of the service account is 
 mapped to a service identity inside of Consul, this is linked to the ACL token which is
 returned to the service.
@@ -71,7 +71,7 @@ which is retrieved from the backend service.
 Communication between the dashboard and the counting service is passed through the 
 service mesh. By default all service mesh traffic is set to `Deny All`. When you first
 load the dashboard you will see that it can not connect to the counting service.
-This is because we have not yet configured the TrafficTarget which creates the consul
+This is because we have not yet configured the TrafficTarget which creates the Consul
 Intentions to allow traffic between two services.
 
 ```bash
@@ -104,7 +104,7 @@ $ xdg-open http://$(kubectl get svc consul-consul-ui -o jsonpath="{.status.loadB
 $ open http://$(kubectl get svc consul-consul-ui -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
 ```
 
-At present we do not have any intentions so the dashboard will not be able to communicate with the upstream service, 
+At present we do not have any intentions, so the dashboard will not be able to communicate with the upstream service, 
 SMI defines a specification called TrafficTarget, it provides a Kubernetes centric way of managing
 Service Mesh security. 
 
@@ -144,7 +144,7 @@ When you apply this resource the controller will interpret this and make changes
 We are stating that we would like to allow traffic from a source with identity
 dashboard to a destination with an identity counting.
 
-If I apply this configuration:
+If you apply this configuration:
 
 ```
 $ kubectl apply -f smi.yaml
@@ -152,23 +152,22 @@ $ kubectl apply -f smi.yaml
 
 You can see in the Consul UI (refresh intentions), that the TrafficTarget controller
 has correctly configured the Consul Service Mesh.
-If I reload my dashboard, everything is now working as expected as the correct
+If you reload your dashboard, everything is now working as expected as the correct
 security configuration has been applied.
-
 
 ### Notes
 If you delete the TrafficTarget resource the controller will correctly delete
-the intention however connections are persistent between a source and destination.
+the intention, however connections are persistent between a source and destination.
 This is far more efficient than establishing a new connection every time and Envoy 
 having to authorize the connection. To force the closure of a connection the easiest
-approach is to delete the pods and re-create.
+approach is to delete the pods (counting, dashboard) and re-create.
 
 The whole process works as Consul (Control Plane) configures Envoy (Data Plane) with a TLS certificate and client
 certificate. When Envoy connects to an upstream the Envoy proxy at the other end requests
 that the downstream sends its client certificate (standard mTLS). The upstream then
 validates that the certificate is signed by the same chain of trust that its own
 certificate is signed. This completes the authentication part of the process.
-Secondary to authentication Envoy uses the SPIFFE id encoded into the client certificate
+Secondary to Authentication Envoy uses the SPIFFE id encoded into the client certificate
 and makes a call to the Control Plane requesting an Authorization check. The control
 plane determines if the source service is allowed to connect to the destination using
 the Intentions graph configured by the TrafficTarget.

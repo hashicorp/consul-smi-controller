@@ -12,7 +12,7 @@ metadata:
 kind: TrafficTarget
 apiVersion: access.smi-spec.io/v1alpha1
 metadata:
-  name: service-a-targets
+  name: service-counting-targets
   namespace: default
 destination:
   kind: ServiceAccount

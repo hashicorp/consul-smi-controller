@@ -1,11 +1,15 @@
 # Consul SMI Demo
 
+## Example Walkthrough
+https://www.loom.com/share/6907c66621294bbea75cc021c70a89c5
+password: smisecret
+
 ## Steps
 
 1. Deploy helm chart to Kubernetes Server
 
 ```bash
-$ kubectl apply -f ./consul/consul
+$ kubectl apply -f ./consul --validate=false
 ```
 
 2. Deploy the SMI CRD and Controller

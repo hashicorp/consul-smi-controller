@@ -91,7 +91,7 @@ func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
 			deleted = append(deleted, v.ID)
 		}
 	}
-	// HELLLOOOOO
+
 	// process creations
 	for _, s := range source {
 		exists := false

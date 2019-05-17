@@ -3,9 +3,14 @@ module github.com/hashicorp/consul-smi
 go 1.12
 
 require (
+	github.com/alecthomas/assert v0.0.0-20170929043011-405dbfeb8e38
+	github.com/alecthomas/colour v0.0.0-20160524082231-60882d9e2721 // indirect
+	github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 // indirect
 	github.com/deislabs/smi-sdk-go v0.0.0-20190510160452-b5da66e05e7c
 	github.com/hashicorp/consul v1.5.0
 	github.com/hashicorp/consul/api v1.1.0
+	github.com/sergi/go-diff v1.0.0 // indirect
+	github.com/stretchr/testify v1.3.0
 	k8s.io/api v0.0.0-20190425012535-181e1f9c52c1
 	k8s.io/apimachinery v0.0.0-20190425132440-17f84483f500
 	k8s.io/client-go v11.0.0+incompatible

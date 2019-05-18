@@ -1,6 +1,8 @@
 package clients
 
 import (
+	"fmt"
+
 	"github.com/hashicorp/consul/api"
 	"k8s.io/klog"
 )
@@ -37,7 +39,8 @@ func (c *ConsulImpl) createIntention(source string, destination string) error {
 		SourceName:      source,
 		DestinationName: destination,
 		Action:          api.IntentionActionAllow,
-		Description:     "Automatically added by Kubernetes",
+		Description:     "Automatically added by K8s SMI controller",
+		Meta:            map[string]string{"CreatedBy": "SMI"},
 	}
 
 	_, _, err := c.client.Connect().IntentionCreate(&in, nil)
@@ -79,6 +82,13 @@ func (c *ConsulImpl) SyncIntentions(source []string, destination string) error {
 
 	// process deletions
 	for _, v := range intentions {
+		// only delete intentions when it has been created by this controller
+		// we can use the Meta field CreatedBy=SMI to handle this
+		if v.Meta["CreatedBy"] != "SMI" {
+			fmt.Println("not created by SMI")
+			continue
+		}
+
 		exists := false
 		for _, s := range source {
 			if v.SourceName == s && v.DestinationName == destination {

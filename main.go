@@ -1,16 +1,3 @@
-/*
-Copyright 2017 The Kubernetes Authors.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package main
 
 import (
@@ -31,9 +18,8 @@ import (
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
 	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
 	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions"
+	"github.com/hashicorp/consul-smi/access"
 	"github.com/hashicorp/consul-smi/clients"
-	"github.com/hashicorp/consul-smi/trafficspec/target"
-	// "k8s.io/sample-controller/pkg/signals"
 )
 
 var (
@@ -82,7 +68,7 @@ func main() {
 	accessInformerFactory := accessInformers.NewSharedInformerFactory(accessClient, time.Second*30)
 	specsInformerFactory := specsInformers.NewSharedInformerFactory(specsClient, time.Second*30)
 
-	controller := target.NewController(
+	controller := access.NewController(
 		kubeClient,
 		accessClient,
 		accessInformerFactory.Access().V1alpha1().TrafficTargets(),

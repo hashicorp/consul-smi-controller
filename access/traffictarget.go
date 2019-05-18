@@ -1,16 +1,4 @@
-/*
-Copyright 2017 The Kubernetes Authors.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-package target
+package access
 
 import (
 	"fmt"
@@ -30,7 +18,6 @@ import (
 	"k8s.io/klog"
 
 	accessv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/access/v1alpha1"
-	// specsv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/specs/v1alpha1"
 	accessClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned"
 	accessScheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/scheme"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions/access/v1alpha1"
@@ -38,7 +25,7 @@ import (
 	"github.com/hashicorp/consul-smi/clients"
 )
 
-const controllerAgentName = "traffic-controller"
+const controllerAgentName = "traffictarget-controller"
 
 const (
 	// SuccessSynced is used as part of the Event 'reason' when a Foo is synced

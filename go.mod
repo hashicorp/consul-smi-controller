@@ -9,6 +9,7 @@ require (
 	github.com/deislabs/smi-sdk-go v0.0.0-20190510160452-b5da66e05e7c
 	github.com/hashicorp/consul v1.5.0
 	github.com/hashicorp/consul/api v1.1.0
+	github.com/patrickmn/go-cache v0.0.0-20180527043350-9f6ff22cfff8
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/stretchr/testify v1.3.0
 	k8s.io/api v0.0.0-20190425012535-181e1f9c52c1

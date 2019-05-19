@@ -9,5 +9,6 @@ type ConsulMock struct {
 
 // SyncIntentions syncs the intentions in Consul
 func (c *ConsulMock) SyncIntentions(source []string, destination string) error {
-	return nil
+	args := c.Mock.Called(source, destination)
+	return args.Error(0)
 }

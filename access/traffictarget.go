@@ -52,6 +52,9 @@ type Controller struct {
 	targetLister accessListers.TrafficTargetLister
 	targetSynced cache.InformerSynced
 
+	// stores deleted objects
+	deletedIndexer cache.Indexer
+
 	// workqueue is a rate limited work queue. This is used to queue work to be
 	// processed instead of performing it as soon as a change happens. This
 	// means we can ensure we only process a fixed amount of resources at a
@@ -70,6 +73,7 @@ func NewController(
 	kubeClient kubernetes.Interface,
 	accessClient accessClientset.Interface,
 	targetInformer accessInformers.TrafficTargetInformer,
+	deletedIndexer cache.Indexer,
 	consulClient clients.Consul) *Controller {
 
 	// Create event broadcaster
@@ -82,19 +86,20 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeClient:   kubeClient,
-		accessClient: accessClient,
-		targetLister: targetInformer.Lister(),
-		targetSynced: targetInformer.Informer().HasSynced,
-		workqueue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TrafficTargets"),
-		recorder:     recorder,
-		consulClient: consulClient,
+		kubeClient:     kubeClient,
+		accessClient:   accessClient,
+		targetLister:   targetInformer.Lister(),
+		targetSynced:   targetInformer.Informer().HasSynced,
+		deletedIndexer: deletedIndexer,
+		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TrafficTargets"),
+		recorder:       recorder,
+		consulClient:   consulClient,
 	}
 
 	klog.Info("Setting up event handlers")
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    controller.enqueueTarget,
-		DeleteFunc: controller.enqueueTarget,
+		DeleteFunc: controller.enqueueDeleted,
 		UpdateFunc: func(old, new interface{}) {
 			controller.enqueueTarget(new)
 		},
@@ -104,13 +109,31 @@ func NewController(
 }
 
 func (c *Controller) enqueueTarget(obj interface{}) {
-	klog.Info("Enquing")
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
 		utilruntime.HandleError(err)
 		return
 	}
+
+	c.workqueue.Add(key)
+}
+
+func (c *Controller) enqueueDeleted(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+
+	dt, ok := obj.(*accessv1alpha1.TrafficTarget)
+	if !ok {
+		utilruntime.HandleError(fmt.Errorf("Unabled to enqueue deleted item, unable to cast"))
+		return
+	}
+
+	c.deletedIndexer.Add(dt)
 	c.workqueue.Add(key)
 }
 
@@ -193,6 +216,7 @@ func (c *Controller) processNextWorkItem() bool {
 			c.workqueue.AddRateLimited(key)
 			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
 		}
+
 		// Finally, if no error occurs we Forget this item so it does not
 		// get queued again until another change happens.
 		c.workqueue.Forget(obj)
@@ -221,16 +245,35 @@ func (c *Controller) syncHandler(key string) error {
 	klog.Infof("syncHandler: key: %s name: %s", key, name)
 
 	// Get the TrafficTarget resource with this namespace/name
-	tt, err := c.targetLister.TrafficTargets(namespace).Get(name)
+	var tt *accessv1alpha1.TrafficTarget
+
+	tt, err = c.targetLister.TrafficTargets(namespace).Get(name)
 	if err != nil {
 		// The TrafficTarget resource may no longer exist, in which case we stop
 		// processing.
-		if errors.IsNotFound(err) {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+
+		// check to see if we have a deleted item
+
+		item, exists, err := c.deletedIndexer.GetByKey(key)
+
+		if !exists || err != nil {
 			utilruntime.HandleError(fmt.Errorf("traffictarget '%s' in work queue no longer exists", key))
 			return nil
 		}
 
-		return err
+		klog.Info("Found deleted item", item)
+		var ok bool
+		tt, ok = item.(*accessv1alpha1.TrafficTarget)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("unable to cast '%s' to TrafficTarget", key))
+			c.deletedIndexer.Delete(key)
+			return nil
+		}
+
+		tt.Status = "Deleted"
 	}
 
 	// Get all targets.
@@ -252,19 +295,28 @@ func (c *Controller) syncHandler(key string) error {
 		}
 	}
 
-	// Sync the current state with the desired state.
+	klog.Infof("Syncing Intentions sources: %v, destination: %s", fromServices, toService)
+	// Sync the current state with the desired state
 	err = c.consulClient.SyncIntentions(fromServices, toService)
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to create intention: %s", err.Error()))
+		// re-add to the queue
 		return nil
 	}
 
-	// Work is done, so set status to created.
+	// Work is done, so set status to created if not deleted item
+	klog.Info("Status " + tt.Status)
+	if tt.Status == "Deleted" {
+		// delete the cache
+		c.deletedIndexer.Delete(key)
+		return nil
+	}
+
+	//Not a deleted item so set the status
+	klog.Infof("Setting status: %s", accessv1alpha1.StatusCreated)
 	err = c.setStatus(tt, accessv1alpha1.StatusCreated)
 	if err != nil {
 		return err
 	}
-
 	c.recorder.Event(tt, corev1.EventTypeNormal, SuccessSynced, fmt.Sprintf(MessageResourceSynced, tt.Namespace, tt.Name))
 
 	return nil

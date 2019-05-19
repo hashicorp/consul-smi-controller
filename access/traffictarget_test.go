@@ -9,6 +9,7 @@ import (
 	"github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/fake"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
 	"github.com/hashicorp/consul-smi/clients"
+	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -47,6 +48,10 @@ func newFixtures(t *testing.T) *fixtures {
 	f.t = t
 	f.objects = []runtime.Object{}
 
+	f.consulClient = &clients.ConsulMock{}
+	f.consulClient.Mock.On("SyncIntentions", mock.Anything, mock.Anything).
+		Return(nil)
+
 	return f
 }
 
@@ -73,13 +78,13 @@ func (f *fixtures) newController() (*Controller, accessInformers.SharedInformerF
 	f.client = fake.NewSimpleClientset(f.objects...)
 	f.kubeClient = fclient.NewSimpleClientset()
 	i := accessInformers.NewSharedInformerFactory(f.client, noResyncPeriod())
-
-	f.consulClient = &clients.ConsulMock{}
+	di := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	c := NewController(
 		f.kubeClient,
 		f.client,
 		i.Access().V1alpha1().TrafficTargets(),
+		di,
 		f.consulClient,
 	)
 
@@ -134,6 +139,11 @@ func (f *fixtures) expectCreateTrafficTargetAction(tt *accessv1alpha1.TrafficTar
 	f.actions = append(f.actions, action)
 }
 
+func (f *fixtures) expectUpdateTrafficTargetAction(tt *accessv1alpha1.TrafficTarget) {
+	action := core.NewUpdateAction(schema.GroupVersionResource{Resource: "traffictargets"}, tt.Namespace, tt)
+	f.actions = append(f.actions, action)
+}
+
 func getKey(tt *accessv1alpha1.TrafficTarget, t *testing.T) string {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(tt)
 	if err != nil {
@@ -143,28 +153,30 @@ func getKey(tt *accessv1alpha1.TrafficTarget, t *testing.T) string {
 	return key
 }
 
-func TestCreatesIntentionsFromNewTrafficTarget(t *testing.T) {
-	tt := &accessv1alpha1.TrafficTarget{
+func createTrafficTarget(name, source, destination string) *accessv1alpha1.TrafficTarget {
+	return &accessv1alpha1.TrafficTarget{
 		TypeMeta: metav1.TypeMeta{APIVersion: accessv1alpha1.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "something",
+			Name:      name,
 			Namespace: metav1.NamespaceDefault,
 		},
 		Destination: accessv1alpha1.IdentityBindingSubject{
 			Kind:      "ServiceAccount",
-			Name:      "servicea",
+			Name:      destination,
 			Namespace: "default",
 		},
 		Sources: []accessv1alpha1.IdentityBindingSubject{
 			accessv1alpha1.IdentityBindingSubject{
 				Kind:      "ServiceAccount",
-				Name:      "serviceb",
+				Name:      source,
 				Namespace: "default",
 			},
 		},
 	}
+}
 
-	// Setup tests
+func TestUpdatesIntentionsFromNewTrafficTarget(t *testing.T) {
+	tt := createTrafficTarget("servicea-target", "serviceb", "servicea")
 	f := newFixtures(t)
 	f.trafficLister = append(f.trafficLister, tt)
 	f.objects = append(f.objects, tt)
@@ -174,4 +186,23 @@ func TestCreatesIntentionsFromNewTrafficTarget(t *testing.T) {
 
 	// start the controller
 	f.run(getKey(tt, t))
+
+	// assert consul client was called
+	f.consulClient.Mock.AssertCalled(t, "SyncIntentions", []string{"serviceb"}, "servicea")
+}
+
+func TestUpdatesIntentionsFromDeletedTrafficTarget(t *testing.T) {
+	tt := createTrafficTarget("servicea-target", "serviceb", "servicea")
+	f := newFixtures(t)
+	f.trafficLister = append(f.trafficLister, tt)
+	f.objects = append(f.objects, tt)
+
+	// expect a traffic target to be created
+	f.expectCreateTrafficTargetAction(tt)
+
+	// start the controller
+	f.run(getKey(tt, t))
+
+	// assert consul client was called
+	f.consulClient.Mock.AssertCalled(t, "SyncIntentions", []string{"serviceb"}, "servicea")
 }

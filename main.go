@@ -7,6 +7,7 @@ import (
 
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
 	"k8s.io/sample-controller/pkg/signals"
@@ -67,11 +68,13 @@ func main() {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, time.Second*30)
 	accessInformerFactory := accessInformers.NewSharedInformerFactory(accessClient, time.Second*30)
 	specsInformerFactory := specsInformers.NewSharedInformerFactory(specsClient, time.Second*30)
+	deletedIndexer := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	controller := access.NewController(
 		kubeClient,
 		accessClient,
 		accessInformerFactory.Access().V1alpha1().TrafficTargets(),
+		deletedIndexer,
 		consulClient,
 	)
 
@@ -81,7 +84,7 @@ func main() {
 	accessInformerFactory.Start(stopCh)
 	specsInformerFactory.Start(stopCh)
 
-	if err = controller.Run(2, stopCh); err != nil {
+	if err = controller.Run(1, stopCh); err != nil {
 		klog.Fatalf("Error running controller: %s", err.Error())
 	}
 }

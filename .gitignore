@@ -1,2 +1,3 @@
 bin/**
 .pid_consul-consul-server
+.vs_code

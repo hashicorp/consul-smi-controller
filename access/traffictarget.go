@@ -5,7 +5,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apiv1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -44,75 +44,74 @@ const (
 
 // Controller is the controller implementation for Foo resources
 type Controller struct {
-	kubeclientset   kubernetes.Interface
-	accessClientset accessClientset.Interface
-	targetLister    accessListers.TrafficTargetLister
-	targetSynced    cache.InformerSynced
-	workqueue       workqueue.RateLimitingInterface
-	recorder        record.EventRecorder
-	consulClient    clients.Consul
+	// kubeClient is a standard kubernetes clientset
+	kubeClient kubernetes.Interface
+	// accessClient is a clientset for our own API group
+	accessClient accessClientset.Interface
+
+	targetLister accessListers.TrafficTargetLister
+	targetSynced cache.InformerSynced
+
+	// workqueue is a rate limited work queue. This is used to queue work to be
+	// processed instead of performing it as soon as a change happens. This
+	// means we can ensure we only process a fixed amount of resources at a
+	// time, and makes it easy to ensure we are never processing the same item
+	// simultaneously in two different workers.
+	workqueue workqueue.RateLimitingInterface
+	// recorder is an event recorder for recording Event resources to the
+	// Kubernetes API.
+	recorder record.EventRecorder
+	// consulClient is a client for interacting with Consul
+	consulClient clients.Consul
 }
 
 // NewController returns a new sample controller
 func NewController(
-	kubeclientset kubernetes.Interface,
-	accessClientset accessClientset.Interface,
+	kubeClient kubernetes.Interface,
+	accessClient accessClientset.Interface,
 	targetInformer accessInformers.TrafficTargetInformer,
-	consulClient clients.Consul,
-) *Controller {
+	consulClient clients.Consul) *Controller {
+
 	// Create event broadcaster
 	// Add controller types to the default Kubernetes Scheme so Events can be
 	// logged for controller types.
 	utilruntime.Must(accessScheme.AddToScheme(scheme.Scheme))
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
-	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:   kubeclientset,
-		accessClientset: accessClientset,
-		targetLister:    targetInformer.Lister(),
-		targetSynced:    targetInformer.Informer().HasSynced,
-		workqueue:       workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), controllerAgentName),
-		recorder:        recorder,
-		consulClient:    consulClient,
+		kubeClient:   kubeClient,
+		accessClient: accessClient,
+		targetLister: targetInformer.Lister(),
+		targetSynced: targetInformer.Informer().HasSynced,
+		workqueue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TrafficTargets"),
+		recorder:     recorder,
+		consulClient: consulClient,
 	}
 
 	klog.Info("Setting up event handlers")
 	targetInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			target := obj.(*accessv1alpha1.TrafficTarget)
-
-			if target.Status != accessv1alpha1.StatusCreated {
-				controller.setStatus(target, accessv1alpha1.StatusPending)
-			}
-		},
+		AddFunc:    controller.enqueueTarget,
+		DeleteFunc: controller.enqueueTarget,
 		UpdateFunc: func(old, new interface{}) {
-			newTarget := new.(*accessv1alpha1.TrafficTarget)
-			oldTarget := old.(*accessv1alpha1.TrafficTarget)
-			if newTarget.ResourceVersion == oldTarget.ResourceVersion {
-				return
-			}
-
-			/// I bet here setting the status is double queuing
-			if oldTarget.Status == accessv1alpha1.StatusPending && newTarget.Status == accessv1alpha1.StatusCreated {
-				fmt.Println("Ignore")
-				return
-			}
-
-			newTarget.Status = accessv1alpha1.StatusPending
-			controller.workqueue.Add(newTarget)
-		},
-		DeleteFunc: func(obj interface{}) {
-			target := obj.(*accessv1alpha1.TrafficTarget)
-			target.SetDeletionTimestamp(&apiv1.Time{Time: time.Now()})
-			controller.workqueue.Add(target)
+			controller.enqueueTarget(new)
 		},
 	})
 
-	// TODO: Create informer that listens for TCPRoute objects
 	return controller
+}
+
+func (c *Controller) enqueueTarget(obj interface{}) {
+	klog.Info("Enquing")
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.Add(key)
 }
 
 // Run will set up the event handlers for types we are interested in, as well
@@ -133,7 +132,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	}
 
 	klog.Infof("Starting %d workers", threadiness)
-	// Launch two workers to process resources
+	// Launch n workers to process resources
 	for i := 0; i < threadiness; i++ {
 		go wait.Until(c.runWorker, time.Second, stopCh)
 	}
@@ -155,23 +154,56 @@ func (c *Controller) runWorker() {
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
 func (c *Controller) processNextWorkItem() bool {
+	klog.Info("processNextWorkItem")
+
 	obj, shutdown := c.workqueue.Get()
+
 	if shutdown {
 		return false
 	}
 
-	defer c.workqueue.Done(obj)
+	// We wrap this block in a func so we can defer c.workqueue.Done.
+	err := func(obj interface{}) error {
+		// We call Done here so the workqueue knows we have finished
+		// processing this item. We also must remember to call Forget if we
+		// do not want this work item being re-queued. For example, we do
+		// not call Forget if a transient error occurs, instead the item is
+		// put back on the workqueue and attempted again after a back-off
+		// period.
+		defer c.workqueue.Done(obj)
+		var key string
+		var ok bool
+		// We expect strings to come off the workqueue. These are of the
+		// form namespace/name. We do this as the delayed nature of the
+		// workqueue means the items in the informer cache may actually be
+		// more up to date that when the item was initially put onto the
+		// workqueue.
+		if key, ok = obj.(string); !ok {
+			// As the item in the workqueue is actually invalid, we call
+			// Forget here else we'd go into a loop of attempting to
+			// process a work item that is invalid.
+			c.workqueue.Forget(obj)
+			utilruntime.HandleError(fmt.Errorf("expected string in workqueue but got %#v", obj))
+			return nil
+		}
+		// Run the syncHandler, passing it the namespace/name string of the
+		// TrafficTarget resource to be synced.
+		if err := c.syncHandler(key); err != nil {
+			// Put the item back on the workqueue to handle any transient errors.
+			c.workqueue.AddRateLimited(key)
+			return fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error())
+		}
+		// Finally, if no error occurs we Forget this item so it does not
+		// get queued again until another change happens.
+		c.workqueue.Forget(obj)
+		klog.Infof("Successfully synced '%s'", key)
+		return nil
+	}(obj)
 
-	// Run the syncHandler, passing it the Resource to be synced.
-	if err := c.syncHandler(obj); err != nil {
-		// Put the item back on the workqueue to handle any transient errors.
-		c.workqueue.AddRateLimited(obj)
-		utilruntime.HandleError(fmt.Errorf("error syncing '%#v': %s, requeuing", obj, err.Error()))
+	if err != nil {
+		utilruntime.HandleError(err)
+		return true
 	}
-
-	// Finally, if no error occurs we Forget this item so it does not
-	// get queued again until another change happens.
-	c.workqueue.Forget(obj)
 
 	return true
 }
@@ -179,27 +211,41 @@ func (c *Controller) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the resource
 // with the current status of the resource.
-func (c *Controller) syncHandler(obj interface{}) error {
-	// Cast the queued object to a TrafficTarget.
-	currentTarget, ok := obj.(*accessv1alpha1.TrafficTarget)
-	if !ok {
-		return nil
+func (c *Controller) syncHandler(key string) error {
+	// Convert the namespace/name string into a distinct namespace and name
+	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return err
+	}
+
+	klog.Infof("syncHandler: key: %s name: %s", key, name)
+
+	// Get the TrafficTarget resource with this namespace/name
+	tt, err := c.targetLister.TrafficTargets(namespace).Get(name)
+	if err != nil {
+		// The TrafficTarget resource may no longer exist, in which case we stop
+		// processing.
+		if errors.IsNotFound(err) {
+			utilruntime.HandleError(fmt.Errorf("traffictarget '%s' in work queue no longer exists", key))
+			return nil
+		}
+
+		return err
 	}
 
 	// Get all targets.
-	allTargets, err := c.targetLister.TrafficTargets(currentTarget.Namespace).List(labels.Everything())
+	allTargets, err := c.targetLister.TrafficTargets(tt.Namespace).List(labels.Everything())
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("unable to list targets: %s", err.Error()))
 		return nil
 	}
 
-	toService := currentTarget.Destination.Name
+	toService := tt.Destination.Name
 	fromServices := []string{}
 
 	// Loop over the targets and if it's the same destination, add the sources.
 	for _, t := range allTargets {
-		// TODO: When HTTP/GRPC routes are added, also check the spec of the TrafficTargets.
-		if t.Destination.Name == currentTarget.Destination.Name {
+		if t.Destination.Name == tt.Destination.Name {
 			for _, s := range t.Sources {
 				fromServices = append(fromServices, s.Name)
 			}
@@ -213,20 +259,13 @@ func (c *Controller) syncHandler(obj interface{}) error {
 		return nil
 	}
 
-	// If the target is deleted, don't update the status.
-	if currentTarget.GetDeletionTimestamp() != nil {
-		return nil
-	}
-
 	// Work is done, so set status to created.
-	err = c.setStatus(currentTarget, accessv1alpha1.StatusCreated)
+	err = c.setStatus(tt, accessv1alpha1.StatusCreated)
 	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("unable to set status: %s", err.Error()))
-		return nil
-
+		return err
 	}
 
-	c.recorder.Event(currentTarget, corev1.EventTypeNormal, SuccessSynced, fmt.Sprintf(MessageResourceSynced, currentTarget.Namespace, currentTarget.Name))
+	c.recorder.Event(tt, corev1.EventTypeNormal, SuccessSynced, fmt.Sprintf(MessageResourceSynced, tt.Namespace, tt.Name))
 
 	return nil
 }
@@ -235,6 +274,6 @@ func (c *Controller) setStatus(target *accessv1alpha1.TrafficTarget, status acce
 	targetCopy := target.DeepCopy()
 	targetCopy.Status = status
 
-	_, err := c.accessClientset.AccessV1alpha1().TrafficTargets(target.Namespace).Update(targetCopy)
+	_, err := c.accessClient.AccessV1alpha1().TrafficTargets(target.Namespace).Update(targetCopy)
 	return err
 }

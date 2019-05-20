@@ -236,6 +236,12 @@ func (c *Controller) processNextWorkItem() bool {
 // converge the two. It then updates the Status block of the resource
 // with the current status of the resource.
 func (c *Controller) syncHandler(key string) error {
+	// are we doing a delete?
+	// we need to track this separately as any mutation to the
+	// TrafficTarget changes the hash which means we can not
+	// delete it from the cache
+	deleteOperation := false
+
 	// Convert the namespace/name string into a distinct namespace and name
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
@@ -273,7 +279,7 @@ func (c *Controller) syncHandler(key string) error {
 			return nil
 		}
 
-		tt.Status = "Deleted"
+		deleteOperation = true
 	}
 
 	// Get all targets.
@@ -304,10 +310,15 @@ func (c *Controller) syncHandler(key string) error {
 	}
 
 	// Work is done, so set status to created if not deleted item
-	klog.Info("Status " + tt.Status)
-	if tt.Status == "Deleted" {
-		// delete the cache
-		c.deletedIndexer.Delete(key)
+	if deleteOperation {
+		// get the original object using the key then delete
+		item, _, err := c.deletedIndexer.GetByKey(key)
+		if err != nil {
+			utilruntime.HandleError(fmt.Errorf("unable to remmove deleted item from cache: %s", err.Error()))
+			return nil
+		}
+
+		c.deletedIndexer.Delete(item)
 		return nil
 	}
 

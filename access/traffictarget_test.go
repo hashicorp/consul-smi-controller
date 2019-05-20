@@ -9,6 +9,7 @@ import (
 	"github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/fake"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
 	"github.com/hashicorp/consul-smi/clients"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,12 +24,13 @@ import (
 var ()
 
 type fixtures struct {
-	consulClient *clients.ConsulMock
-	client       *fake.Clientset
-	kubeClient   *fclient.Clientset
-	ready        chan struct{}
-	controller   *Controller
-	t            *testing.T
+	consulClient   *clients.ConsulMock
+	client         *fake.Clientset
+	kubeClient     *fclient.Clientset
+	ready          chan struct{}
+	deletedIndexer cache.Indexer
+	controller     *Controller
+	t              *testing.T
 	// Actions expected to happen on the client
 	actions []core.Action
 	// Objects to put in the store
@@ -51,6 +53,8 @@ func newFixtures(t *testing.T) *fixtures {
 	f.consulClient = &clients.ConsulMock{}
 	f.consulClient.Mock.On("SyncIntentions", mock.Anything, mock.Anything).
 		Return(nil)
+
+	f.deletedIndexer = cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	return f
 }
@@ -78,13 +82,12 @@ func (f *fixtures) newController() (*Controller, accessInformers.SharedInformerF
 	f.client = fake.NewSimpleClientset(f.objects...)
 	f.kubeClient = fclient.NewSimpleClientset()
 	i := accessInformers.NewSharedInformerFactory(f.client, noResyncPeriod())
-	di := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
 	c := NewController(
 		f.kubeClient,
 		f.client,
 		i.Access().V1alpha1().TrafficTargets(),
-		di,
+		f.deletedIndexer,
 		f.consulClient,
 	)
 
@@ -175,6 +178,8 @@ func createTrafficTarget(name, source, destination string) *accessv1alpha1.Traff
 	}
 }
 
+// Tests that the intentions are created correctly when a new TrafficTarget
+// is submitted
 func TestUpdatesIntentionsFromNewTrafficTarget(t *testing.T) {
 	tt := createTrafficTarget("servicea-target", "serviceb", "servicea")
 	f := newFixtures(t)
@@ -191,18 +196,21 @@ func TestUpdatesIntentionsFromNewTrafficTarget(t *testing.T) {
 	f.consulClient.Mock.AssertCalled(t, "SyncIntentions", []string{"serviceb"}, "servicea")
 }
 
+// Tests that the intentions are deleted correctly when a TrafficTarget is
+// deleted
 func TestUpdatesIntentionsFromDeletedTrafficTarget(t *testing.T) {
 	tt := createTrafficTarget("servicea-target", "serviceb", "servicea")
 	f := newFixtures(t)
-	f.trafficLister = append(f.trafficLister, tt)
 	f.objects = append(f.objects, tt)
-
-	// expect a traffic target to be created
-	f.expectCreateTrafficTargetAction(tt)
+	f.deletedIndexer.Add(tt)
 
 	// start the controller
 	f.run(getKey(tt, t))
 
 	// assert consul client was called
-	f.consulClient.Mock.AssertCalled(t, "SyncIntentions", []string{"serviceb"}, "servicea")
+	f.consulClient.Mock.AssertCalled(t, "SyncIntentions", []string{}, "servicea")
+	// assert the deleted object is removed from the cache
+	_, exists, err := f.deletedIndexer.Get(tt)
+	assert.NoError(t, err)
+	assert.False(t, exists, "target should have been deleted from the cache")
 }

@@ -1,6 +1,9 @@
 FROM alpine:latest
 
-RUN mkdir /app
-COPY bin/trafficspec /app/trafficspec
+RUN addgroup -g 1000 -S app && \
+    adduser -u 1000 -S app -G app
 
-CMD /app/trafficspec
+RUN mkdir /app
+COPY bin/smi-controller /app/smi-controller
+
+CMD /app/smi-controller

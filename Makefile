@@ -1,6 +1,6 @@
 KUBECONFIG := ${HOME}/.kube/config
 VERSION := v0.0.0-alpha.1
-DOCKER_TAG := quay.io/nicholasjackson/smi-traffic-controller
+DOCKER_TAG := hashicorp/consul-smi-controller
 
 
 build:
@@ -15,3 +15,5 @@ run-controller: build
 build-docker: build
 	docker build -f ./Dockerfile -t ${DOCKER_TAG}:${VERSION} .
 
+push-docker:
+	docker push ${DOCKER_TAG}:${VERSION}

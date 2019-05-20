@@ -61,13 +61,6 @@ rules:
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
 ---
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: smi-controller
-  namespace: default
-
----
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -81,39 +74,47 @@ subjects:
   name: smi-controller
   namespace: default
 
-# secret for registry
 ---
 apiVersion: v1
-kind: Secret
+kind: ServiceAccount
 metadata:
-  name: nicholasjackson-smi-demo-pull-secret
-data:
-  .dockerconfigjson: ewogICJhdXRocyI6IHsKICAgICJxdWF5LmlvIjogewogICAgICAiYXV0aCI6ICJibWxqYUc5c1lYTnFZV05yYzI5dUszTnRhVjlrWlcxdk9sSTFXRmxCVVRrNVZFUXpNMHRWTVVWSFdGY3lUakJTU0V0VlFVbEtXVEZYVnpWWVRsTlRVMUExTVV0R1FsTkNUMG96V0ZoRFdVMUxVVk5XVDFsWE1UYz0iLAogICAgICAiZW1haWwiOiAiIgogICAgfQogIH0KfQ==
-type: kubernetes.io/dockerconfigjson
+  name: smi-controller
+  namespace: default
 
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: smi-trafficspec-controller
+  name: consul-smi-controller-deployment
+  labels:
+    app: consul-smi-controller
 spec:
-  serviceAccountName: smi-controller
-  automountServiceAccountToken: true
-  containers:
-  - name: trafficspec-controller
-    image: quay.io/nicholasjackson/smi-traffic-controller:v0.0.0-alpha.1
-    imagePullPolicy: IfNotPresent
-    command: ['/app/trafficspec']
-    args: ["--consul-http-addr=http://$(HOST_IP):8500", "--consul-http-token=$(CONSUL_HTTP_TOKEN)"]
-    env:
-    - name: CONSUL_HTTP_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: consul-consul-bootstrap-acl-token
-          key: token
-    - name: HOST_IP
-      valueFrom:
-        fieldRef:
-          fieldPath: status.hostIP
-  imagePullSecrets:
-    - name: nicholasjackson-smi-demo-pull-secret   
+  replicas: 1
+  selector:
+    matchLabels:
+      app: consul-smi-controller
+  template:
+    metadata:
+      labels:
+        app: consul-smi-controller
+    spec:
+      serviceAccountName: smi-controller
+      automountServiceAccountToken: true
+      containers:
+      - name: consul-smi-controller
+        image: hashicorp/consul-smi-controller:v0.0.0-alpha.1
+        imagePullPolicy: IfNotPresent
+        command: ['/app/smi-controller']
+        args: ["--consul-http-addr=http://$(HOST_IP):8500", "--consul-http-token=$(CONSUL_HTTP_TOKEN)"]
+        env:
+        - name: CONSUL_HTTP_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: consul-consul-bootstrap-acl-token
+              key: token
+        - name: HOST_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+      imagePullSecrets:
+        - name: docker-creds

@@ -15,6 +15,8 @@ One of the custom resources defined by SMI is the TrafficTarget resource, develo
 
 ## How to install
 To use the Consul SMI Controller, you will need to have a running Consul cluster with Connect enabled.
+
+### Installing Consul
 Paying attention to the values shown below, you can use the official Consul Helm chart by cloning `https://github.com/hashicorp/consul-helm.git`.
 Then installing it by running `helm install -f values.yaml --name <name> ./consul-helm`.
 
@@ -62,6 +64,32 @@ connectInject:
     enabled: true
 ```
 
+### Deploying the Consul SMI Controller
+In order for the Consul SMI Controller to work, it needs to be able to read and write Intentions in Consul. 
+To do this, you need to create the policy below with `consul acl policy create -name consul-smi-controller -rules @controller-policy.hcl`.
+```ruby
+agent_prefix "" {
+  policy = "write"
+}
+```
+
+And then issue an ACL token with that policy `consul acl token create -description "read/write access for the consul-smi-controller" -policy-name consul-smi-controller`, and copy the token that it outputs.
+
+With this token, you create a secret named `consul-smi-controller-acl-token` in Kubernetes that the Consul SMI Controller can read and use.
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: consul-smi-controller-acl-token
+type: Opaque
+stringData:
+  token: <token>
+```
+
+And then deploy the Consul SMI Controller using `kubectl apply -f consul-smi-controller.yaml`.
+
+## How to use
+### Deploying the applications
 Now that you have a running Consul cluster, you can deploy the applications with an annotation of `'consul.hashicorp.com/connect-inject': 'true'` and `"consul.hashicorp.com/connect-service": "<service name>"`. A sidecar proxy will automatically be injected and the service automatically registered in the service catalog of Consul.
 
 Authentication is done using Kubernetes service accounts to ensure the service is who it says it is.
@@ -134,7 +162,7 @@ spec:
 
 Notice how the dashboard has an upstream defined as counting:9001. This will send all traffic to localhost:9001 to the sidecar proxy of the counting service.
 
-## How to use
+### Creating intentions
 Assuming you now have two services running in Kubernetes: a dashboard that shows the current value and a counting service that increases the count with each request. Both are configured to communicate via the Envoy sidecar proxy.
 
 By default, Consul Connect denies all traffic through the service mesh. In order for traffic from the dashboard to be able to reach the backend service, you need to define an intention that allows traffic from the dashboard to the backend service.

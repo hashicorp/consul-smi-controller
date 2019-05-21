@@ -1,5 +1,5 @@
 # Consul SMI CRD
-Experimental repository containing Kubernetes CRDs for the Service Mesh Interface spec (SMI)
+Experimental repository containing Kubernetes CRDs for the Service Mesh Interface spec (SMI)  
 **Requires Consul 1.5.x or above**
 
 ## Service Mesh Interface

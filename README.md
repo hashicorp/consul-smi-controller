@@ -68,7 +68,7 @@ connectInject:
 In order for the Consul SMI Controller to work, it needs to be able to read and write Intentions in Consul. 
 To do this, you need to create the policy below with `consul acl policy create -name consul-smi-controller -rules @controller-policy.hcl`.
 ```ruby
-agent_prefix "" {
+service "" {
   policy = "write"
 }
 ```

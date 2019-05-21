@@ -1,5 +1,6 @@
 # Consul SMI CRD
 Experimental repository containing Kubernetes CRDs for the Service Mesh Interface spec (SMI)
+**Requires Consul 1.5.x or above**
 
 ## Service Mesh Interface
 Microsoft’s Service Mesh Interface is a series of Kubernetes controllers for implementing various service mesh capabilities. At launch, SMI will support four primary functions:

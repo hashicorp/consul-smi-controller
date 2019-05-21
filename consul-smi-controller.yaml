@@ -116,5 +116,3 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.hostIP
-      imagePullSecrets:
-        - name: docker-creds

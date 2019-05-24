@@ -32,43 +32,63 @@ spec:
 
 # Create a pod for backend service
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: counting
-  annotations:
-    'consul.hashicorp.com/connect-inject': 'true'
-    "consul.hashicorp.com/connect-service": "counting"
+  name: counting-deployment
+  labels:
+    app: counting
 spec:
-  serviceAccountName: counting
-  automountServiceAccountToken: true
-  containers:
-    - name: counting
-      image: hashicorp/counting-service:0.0.2
-      ports:
-        - containerPort: 9001
-          name: http
+  replicas: 3
+  selector:
+    matchLabels:
+      app: counting
+  template:
+    metadata:
+      name: counting
+      annotations:
+        'consul.hashicorp.com/connect-inject': 'true'
+        "consul.hashicorp.com/connect-service": "counting"
+    spec:
+      serviceAccountName: counting
+      automountServiceAccountToken: true
+      containers:
+        - name: counting
+          image: hashicorp/counting-service:0.0.2
+          ports:
+            - containerPort: 9001
+              name: http
 
 # Create a pod for frontend service
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: dashboard
+  name: dashboard-deployment
   labels:
-    app: 'dashboard'
-  annotations:
-    'consul.hashicorp.com/connect-inject': 'true'
-    'consul.hashicorp.com/connect-service-upstreams': 'counting:9001'
+    app: dashboard
 spec:
-  serviceAccountName: dashboard
-  automountServiceAccountToken: true
-  containers:
-    - name: dashboard
-      image: hashicorp/dashboard-service:0.0.3
-      ports:
-        - containerPort: 9002
-          name: http
-      env:
-        - name: COUNTING_SERVICE_URL
-          value: 'http://localhost:9001'
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      name: dashboard
+      labels:
+        app: 'dashboard'
+      annotations:
+        'consul.hashicorp.com/connect-inject': 'true'
+        'consul.hashicorp.com/connect-service-upstreams': 'counting:9001'
+    spec:
+      serviceAccountName: dashboard
+      automountServiceAccountToken: true
+      containers:
+        - name: dashboard
+          image: hashicorp/dashboard-service:0.0.3
+          ports:
+            - containerPort: 9002
+              name: http
+          env:
+            - name: COUNTING_SERVICE_URL
+              value: 'http://localhost:9001'

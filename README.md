@@ -67,14 +67,25 @@ connectInject:
 
 ### Deploying the Consul SMI Controller
 In order for the Consul SMI Controller to work, it needs to be able to read and write Intentions in Consul. 
-To do this, you need to issue an ACL token with the policy *global-management* `consul acl token create -description "read/write access for the consul-smi-controller" -policy-name global-management`, and copy the token that it outputs.
+To do this, you need to issue an ACL token with the policy *global-management* 
+
+```
+consul acl token create -description "read/write access for the consul-smi-controller" -policy-name global-management
+```
+
+and copy the token that it outputs.
 
 With this token, you create a secret named `consul-smi-controller-acl-token` in Kubernetes that the Consul SMI Controller can read and use.
+
 ```yaml
 $ kubectl create secret generic consul-smi-acl-token --from-literal=token=[your token]
 ```
 
-And then deploy the Consul SMI Controller using `kubectl apply -f consul-smi-controller.yaml`.
+And then deploy the Consul SMI Controller using: 
+
+```
+kubectl apply -f consul-smi-controller.yaml
+```
 
 ## How to use
 ### Deploying the applications

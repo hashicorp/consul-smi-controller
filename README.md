@@ -120,6 +120,8 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: counting
+  labels:
+    app: counting
   annotations:
     'consul.hashicorp.com/connect-inject': 'true'
     "consul.hashicorp.com/connect-service": "counting"
@@ -141,7 +143,7 @@ kind: Pod
 metadata:
   name: dashboard
   labels:
-    app: 'dashboard'
+    app: dashboard
   annotations:
     'consul.hashicorp.com/connect-inject': 'true'
     'consul.hashicorp.com/connect-service-upstreams': 'counting:9001'

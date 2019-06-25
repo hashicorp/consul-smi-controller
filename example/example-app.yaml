@@ -46,6 +46,8 @@ spec:
   template:
     metadata:
       name: counting
+      labels:
+        app: counting
       annotations:
         'consul.hashicorp.com/connect-inject': 'true'
         "consul.hashicorp.com/connect-service": "counting"

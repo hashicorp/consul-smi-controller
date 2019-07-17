@@ -28,8 +28,12 @@ import (
 const controllerAgentName = "traffictarget-controller"
 
 const (
-	// SuccessSynced is used as part of the Event 'reason' when a Foo is synced
+	// SuccessSynced is used as part of the Event 'reason' when a TrafficTarget is synced
 	SuccessSynced = "Synced"
+
+	// ErrSyncingIntentions is used as part of the Event 'reason' when a TrafficTarget intentions can not be synced
+	ErrSyncingIntentions = "ErrSyncingIntentions"
+
 	// ErrResourceExists is used as part of the Event 'reason' when a Foo fails
 	// to sync due to a Deployment of the same name already existing.
 	ErrResourceExists = "ErrResourceExists"
@@ -37,7 +41,12 @@ const (
 	// MessageResourceExists is the message used for Events when a resource
 	// fails to sync due to a Deployment already existing
 	MessageResourceExists = "Resource %q already exists and is not managed by Foo"
-	// MessageResourceSynced is the message used for an Event fired when a Foo
+
+	// MessageResourceSyncFailed is the message used for an Event fired when a TrafficTarget
+	// is not synced successfully
+	MessageResourceSyncFailed = "%s/%s synced failed: %s"
+
+	// MessageResourceSynced is the message used for an Event fired when a TrafficTarget
 	// is synced successfully
 	MessageResourceSynced = "%s/%s synced successfully"
 )
@@ -101,6 +110,11 @@ func NewController(
 		AddFunc:    controller.enqueueTarget,
 		DeleteFunc: controller.enqueueDeleted,
 		UpdateFunc: func(old, new interface{}) {
+			if old == new {
+				klog.Info("Skipping update, old instance is the same as the new instance")
+				return
+			}
+
 			controller.enqueueTarget(new)
 		},
 	})
@@ -305,16 +319,23 @@ func (c *Controller) syncHandler(key string) error {
 	// Sync the current state with the desired state
 	err = c.consulClient.SyncIntentions(fromServices, toService)
 	if err != nil {
+
+		// ignore the error settings the status, we need to return the underlying error
+		klog.Infof("Setting status: %s", accessv1alpha1.StatusPending)
+		c.setStatus(tt, accessv1alpha1.StatusPending)
+		c.recorder.Event(tt, corev1.EventTypeNormal, ErrSyncingIntentions, fmt.Sprintf(MessageResourceSyncFailed, tt.Namespace, tt.Name, err.Error()))
+
 		// re-add to the queue
-		return nil
+		utilruntime.HandleError(fmt.Errorf("Unable to sync intentions: %s", err.Error()))
+		return err
 	}
 
-	// Work is done, so set status to created if not deleted item
+	// So set status to created if not deleted item
 	if deleteOperation {
 		// get the original object using the key then delete
 		item, _, err := c.deletedIndexer.GetByKey(key)
 		if err != nil {
-			utilruntime.HandleError(fmt.Errorf("unable to remmove deleted item from cache: %s", err.Error()))
+			utilruntime.HandleError(fmt.Errorf("unable to remove deleted item from cache: %s", err.Error()))
 			return nil
 		}
 
@@ -328,6 +349,7 @@ func (c *Controller) syncHandler(key string) error {
 	if err != nil {
 		return err
 	}
+
 	c.recorder.Event(tt, corev1.EventTypeNormal, SuccessSynced, fmt.Sprintf(MessageResourceSynced, tt.Namespace, tt.Name))
 
 	return nil

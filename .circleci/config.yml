@@ -2,15 +2,15 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.12
+      - image: circleci/golang:1.12.7
     environment:
       GO111MODULE: "on"
-    working_directory: /go/src/github.com/hashicorp/consul-smi
+    working_directory: /go/src/github.com/hashicorp/consul-smi-controller
     steps:
       - checkout
       - run: 
           name: build application
-          command: GO_ENABLED=0 GOOS=linux go build -o smi-controller ./trafficspec
+          command: GO_ENABLED=0 GOOS=linux go build -o smi-controller .
       - run: 
           name: test application
           command: go test -v --race ./...

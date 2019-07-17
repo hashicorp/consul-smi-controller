@@ -19,8 +19,8 @@ import (
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
 	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
 	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions"
-	"github.com/hashicorp/consul-smi/access"
-	"github.com/hashicorp/consul-smi/clients"
+	"github.com/hashicorp/consul-smi-controller/access"
+	"github.com/hashicorp/consul-smi-controller/clients"
 )
 
 var (

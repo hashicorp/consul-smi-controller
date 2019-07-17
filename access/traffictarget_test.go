@@ -8,7 +8,7 @@ import (
 	accessv1alpha1 "github.com/deislabs/smi-sdk-go/pkg/apis/access/v1alpha1"
 	"github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/fake"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
-	"github.com/hashicorp/consul-smi/clients"
+	"github.com/hashicorp/consul-smi-controller/clients"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

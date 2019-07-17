@@ -22,7 +22,7 @@ import (
 	accessScheme "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/clientset/versioned/scheme"
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions/access/v1alpha1"
 	accessListers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/listers/access/v1alpha1"
-	"github.com/hashicorp/consul-smi/clients"
+	"github.com/hashicorp/consul-smi-controller/clients"
 )
 
 const controllerAgentName = "traffictarget-controller"

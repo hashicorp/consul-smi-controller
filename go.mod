@@ -1,4 +1,4 @@
-module github.com/hashicorp/consul-smi
+module github.com/hashicorp/consul-smi-controller
 
 go 1.12
 

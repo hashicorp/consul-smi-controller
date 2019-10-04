@@ -14,6 +14,7 @@ services:
     - .:/output
     ports:
     - 6443:6443
+    - 8500:9500  # Consul HTTP
 
   node:
     image: rancher/k3s:v0.9.1

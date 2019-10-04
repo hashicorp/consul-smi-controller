@@ -5,10 +5,10 @@ function up() {
 	docker-compose up -d
 }
 
-function install() {
+function install_core() {
 	# Wait for cluster to be available
 	until $(kubectl get pods); do
-		echo "Waiting for startup"
+		echo "Waiting for Kubernetes to start"
 		sleep 1
 	done
 
@@ -24,9 +24,11 @@ function install() {
 
 	# Initialize tiller and wait for complete
 	helm init --wait --service-account tiller
+}
 
-	# Wait for tiller to start
-	
+function install_consul() {
+  echo "Installing Consul"
+
 	# Install the Consul helm chart	
 	helm install -n consul ./helm-charts/consul-helm-0.9.0
 
@@ -42,13 +44,25 @@ function install() {
     sleep 1
   done
 
+  # Get a root ACL token and write to disk
+   kubectl get secret consul-consul-bootstrap-acl-token -o json | jq -r .data.token > consul_acl.token 
+}
+
+function install_smi() {
+  echo "Install SMI"
+
   # Install the CRDs for the controller
   kubectl apply -f ./k8s_config
 }
 
 function down() {
-	docker-compose down -v
+	docker-compose down
 }
+
+function clean() {
+  docker-compose down -v
+}
+
 
 function proxy_consul() {
   kubectl port-forward svc/consul-consul-server 8500
@@ -60,12 +74,18 @@ case "$1" in
     up;
     ;;
   "down")
-    echo "Stopping Kubernetes and removing volumes"
+    echo "Stopping Kubernetes"
     down;
+    ;;
+  "clean")
+    echo "Stopping Kubernetes and removing all data"
+    clean;
     ;;
   "install")
     echo "Installing and configuring environment"
-    install;
+    install_core;
+    install_consul;
+    install_smi;
     ;;
   "proxy_consul")
     echo "Proxying Consul server in K8s to localhost:8500"
@@ -74,7 +94,8 @@ case "$1" in
   *)
     echo "Options"
     echo "  up           - Start K8s server"
-    echo "  down         - Stop K8s server and cleanup"
+    echo "  down         - Stop K8s server"
+    echo "  clean        - Stop K8s server and cleanup"
     echo "  install      - Install components such as Consul"
     echo "  proxy_consul - Expose Consul server on localhost:8500"
     exit 1 

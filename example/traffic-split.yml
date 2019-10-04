@@ -1,0 +1,30 @@
+# The following TrafficSplit would create Consul config as follows
+# {
+#     "Kind": "service-splitter",
+#     "Name": "api",
+#     "Splits": [
+#         {
+#             "Weight": 100,
+#             "Service": "api",
+#             "ServiceSubset": "v1"
+#         },
+#         {
+#             "Weight": 0,
+#             "Service": "api",
+#             "ServiceSubset": "v2"
+#         }
+#     ],
+# }
+
+
+apiVersion: split.smi-spec.io/v1alpha1
+kind: TrafficSplit
+metadata:
+  name: api-canary 
+spec:
+  service: api
+  backends:
+  - service: v1
+    weight: 40
+  - service: v2
+    weight: 60

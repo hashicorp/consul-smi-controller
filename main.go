@@ -19,8 +19,8 @@ import (
 	accessInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/access/informers/externalversions"
 	specsClientset "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/clientset/versioned"
 	specsInformers "github.com/deislabs/smi-sdk-go/pkg/gen/client/specs/informers/externalversions"
-	"github.com/hashicorp/consul-smi-controller/access"
 	"github.com/hashicorp/consul-smi-controller/clients"
+	"github.com/hashicorp/consul-smi-controller/controllers"
 )
 
 var (
@@ -70,7 +70,7 @@ func main() {
 	specsInformerFactory := specsInformers.NewSharedInformerFactory(specsClient, time.Second*30)
 	deletedIndexer := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{})
 
-	controller := access.NewController(
+	controller := controllers.NewTrafficTarget(
 		kubeClient,
 		accessClient,
 		accessInformerFactory.Access().V1alpha1().TrafficTargets(),

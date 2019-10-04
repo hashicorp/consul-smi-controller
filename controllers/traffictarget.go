@@ -1,4 +1,4 @@
-package access
+package controllers
 
 import (
 	"fmt"
@@ -25,34 +25,11 @@ import (
 	"github.com/hashicorp/consul-smi-controller/clients"
 )
 
-const controllerAgentName = "traffictarget-controller"
+// TrafficTargetAgentName is the name of the controller
+const TrafficTargetAgentName = "traffictarget-controller"
 
-const (
-	// SuccessSynced is used as part of the Event 'reason' when a TrafficTarget is synced
-	SuccessSynced = "Synced"
-
-	// ErrSyncingIntentions is used as part of the Event 'reason' when a TrafficTarget intentions can not be synced
-	ErrSyncingIntentions = "ErrSyncingIntentions"
-
-	// ErrResourceExists is used as part of the Event 'reason' when a Foo fails
-	// to sync due to a Deployment of the same name already existing.
-	ErrResourceExists = "ErrResourceExists"
-
-	// MessageResourceExists is the message used for Events when a resource
-	// fails to sync due to a Deployment already existing
-	MessageResourceExists = "Resource %q already exists and is not managed by Foo"
-
-	// MessageResourceSyncFailed is the message used for an Event fired when a TrafficTarget
-	// is not synced successfully
-	MessageResourceSyncFailed = "%s/%s synced failed: %s"
-
-	// MessageResourceSynced is the message used for an Event fired when a TrafficTarget
-	// is synced successfully
-	MessageResourceSynced = "%s/%s synced successfully"
-)
-
-// Controller is the controller implementation for Foo resources
-type Controller struct {
+// TrafficTarget is the controller implementation for Foo resources
+type TrafficTarget struct {
 	// kubeClient is a standard kubernetes clientset
 	kubeClient kubernetes.Interface
 	// accessClient is a clientset for our own API group
@@ -77,13 +54,13 @@ type Controller struct {
 	consulClient clients.Consul
 }
 
-// NewController returns a new sample controller
-func NewController(
+// NewTrafficTarget returns a new traffictarget  controller
+func NewTrafficTarget(
 	kubeClient kubernetes.Interface,
 	accessClient accessClientset.Interface,
 	targetInformer accessInformers.TrafficTargetInformer,
 	deletedIndexer cache.Indexer,
-	consulClient clients.Consul) *Controller {
+	consulClient clients.Consul) *TrafficTarget {
 
 	// Create event broadcaster
 	// Add controller types to the default Kubernetes Scheme so Events can be
@@ -92,15 +69,15 @@ func NewController(
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
+	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: TrafficTargetAgentName})
 
-	controller := &Controller{
+	controller := &TrafficTarget{
 		kubeClient:     kubeClient,
 		accessClient:   accessClient,
 		targetLister:   targetInformer.Lister(),
 		targetSynced:   targetInformer.Informer().HasSynced,
 		deletedIndexer: deletedIndexer,
-		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "TrafficTargets"),
+		workqueue:      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), TrafficTargetAgentName),
 		recorder:       recorder,
 		consulClient:   consulClient,
 	}
@@ -122,7 +99,7 @@ func NewController(
 	return controller
 }
 
-func (c *Controller) enqueueTarget(obj interface{}) {
+func (c *TrafficTarget) enqueueTarget(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -133,7 +110,7 @@ func (c *Controller) enqueueTarget(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-func (c *Controller) enqueueDeleted(obj interface{}) {
+func (c *TrafficTarget) enqueueDeleted(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.DeletionHandlingMetaNamespaceKeyFunc(obj); err != nil {
@@ -155,7 +132,7 @@ func (c *Controller) enqueueDeleted(obj interface{}) {
 // as syncing informer caches and starting workers. It will block until stopCh
 // is closed, at which point it will shutdown the workqueue and wait for
 // workers to finish processing their current work items.
-func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
+func (c *TrafficTarget) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
@@ -183,14 +160,14 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 // runWorker is a long-running function that will continually call the
 // processNextWorkItem function in order to read and process a message on the
 // workqueue.
-func (c *Controller) runWorker() {
+func (c *TrafficTarget) runWorker() {
 	for c.processNextWorkItem() {
 	}
 }
 
 // processNextWorkItem will read a single work item off the workqueue and
 // attempt to process it, by calling the syncHandler.
-func (c *Controller) processNextWorkItem() bool {
+func (c *TrafficTarget) processNextWorkItem() bool {
 	klog.Info("processNextWorkItem")
 
 	obj, shutdown := c.workqueue.Get()
@@ -249,7 +226,7 @@ func (c *Controller) processNextWorkItem() bool {
 // syncHandler compares the actual state with the desired, and attempts to
 // converge the two. It then updates the Status block of the resource
 // with the current status of the resource.
-func (c *Controller) syncHandler(key string) error {
+func (c *TrafficTarget) syncHandler(key string) error {
 	// are we doing a delete?
 	// we need to track this separately as any mutation to the
 	// TrafficTarget changes the hash which means we can not
@@ -355,7 +332,7 @@ func (c *Controller) syncHandler(key string) error {
 	return nil
 }
 
-func (c *Controller) setStatus(target *accessv1alpha1.TrafficTarget, status accessv1alpha1.Status) error {
+func (c *TrafficTarget) setStatus(target *accessv1alpha1.TrafficTarget, status accessv1alpha1.Status) error {
 	targetCopy := target.DeepCopy()
 	targetCopy.Status = status
 

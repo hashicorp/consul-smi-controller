@@ -1,4 +1,4 @@
-package access
+package controllers
 
 import (
 	"os"
@@ -29,7 +29,7 @@ type fixtures struct {
 	kubeClient     *fclient.Clientset
 	ready          chan struct{}
 	deletedIndexer cache.Indexer
-	controller     *Controller
+	controller     *TrafficTarget
 	t              *testing.T
 	// Actions expected to happen on the client
 	actions []core.Action

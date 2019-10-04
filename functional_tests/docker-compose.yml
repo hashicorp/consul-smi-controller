@@ -14,7 +14,6 @@ services:
     - .:/output
     ports:
     - 6443:6443
-    - 8500:9500  # Consul HTTP
 
   node:
     image: rancher/k3s:v0.9.1
@@ -27,6 +26,8 @@ services:
     - K3S_CLUSTER_SECRET=somethingtotallyrandom
     # Can also use K3S_TOKEN from /var/lib/rancher/k3s/server/node-token instead of K3S_CLUSTER_SECRET
     # - K3S_TOKEN=K13849a67fc385fd3c0fa6133a8649d9e717b0258b3b09c87ffc33dae362c12d8c0::node:2e373dca319a0525745fd8b3d8120d9c
+    ports:
+    - 8500:8500  # Consul HTTP for client
 
 volumes:
   k3s-server: {}

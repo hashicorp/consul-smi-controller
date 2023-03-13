@@ -1,7 +1,5 @@
 # Consul Service Mesh Interface Controller
 
-[![CircleCI](https://circleci.com/gh/hashicorp/consul-smi-controller.svg?style=svg)](https://circleci.com/gh/hashicorp/consul-smi-controller)
-
 Experimental repository containing Kubernetes CRDs for the Service Mesh Interface spec (SMI)  
 **Requires Consul 1.5.x or above**
 
